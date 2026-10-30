@@ -16,7 +16,8 @@
   HUB.saveKey = function (v) {
     try { if (v == null) localStorage.removeItem(KEY_STORE); else localStorage.setItem(KEY_STORE, v); } catch (e) { /* 저장 불가 환경 */ }
   };
-  HUB.hashSuffix = function () { return location.hash || ''; };
+  // 페이지 사이 링크에 붙이는 해시. 비밀번호만 인코딩해 다시 만든다(다른 해시 조각이나 따옴표가 href 로 새지 않게).
+  HUB.hashSuffix = function () { var k = HUB.keyFromHash(location.hash); return k ? '#k=' + encodeURIComponent(k) : ''; };
 
   // ───────── 복호화 ─────────
   function b64(s) { var bin = atob(s), out = new Uint8Array(bin.length); for (var i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i); return out; }
@@ -263,7 +264,8 @@
   };
 
   // ───────── 비밀번호 상자 ─────────
-  // #gate 요소 안에 그린다. 링크(#k=) → 저장값 순으로 시도하고, 실패하면 입력을 받는다.
+  // #gate 요소 안에 그린다. 링크(#k=) → 저장값 순으로 시도하고, 둘 다 실패하면 입력을 받는다.
+  // 링크가 아닌 키로 열렸으면 주소 해시를 그 키로 바꾼다 — 비밀번호 교체 뒤 옛 링크로 들어와도 페이지를 옮길 때마다 다시 묻지 않게.
   HUB.gate = function (opts) {
     var root = document.getElementById('gate');
     root.innerHTML = '<div class="hub-gate"><h1>' + HUB.escape(opts.title || 'GRP1 개발 허브') + '</h1><p class="hub-gate-msg" id="gate-msg">여는 중…</p>' +
@@ -275,23 +277,34 @@
     if (!window.crypto || !crypto.subtle || typeof DecompressionStream === 'undefined') {
       return say('이 브라우저에서는 열 수 없습니다. 최신 Chrome, Edge, Safari 로 열어 주세요.', true);
     }
-    async function attempt(pass, fromLink) {
+    // keys: [{ pass, link }] 를 차례로 시도한다. 열리면 true.
+    async function attempt(keys) {
       say('여는 중…');
-      var manifest;
-      try { manifest = await HUB.openManifest(pass); }
-      catch (e) {
-        if (/load|매니페스트/.test(e.message)) return say('목록을 불러오지 못했습니다. 잠시 뒤 새로고침해 주세요.', true);
-        if (!fromLink) HUB.saveKey(null);
-        return ask(fromLink ? '링크의 비밀번호가 맞지 않습니다. 비밀번호를 직접 입력해 주세요.' : '비밀번호가 맞지 않습니다.', true);
+      var linkFailed = false;
+      for (var i = 0; i < keys.length; i++) {
+        var k = keys[i], manifest;
+        try { manifest = await HUB.openManifest(k.pass); }
+        catch (e) {
+          if (/load|매니페스트/.test(e.message)) { say('목록을 불러오지 못했습니다. 잠시 뒤 새로고침해 주세요.', true); return true; }
+          if (k.link) linkFailed = true; else HUB.saveKey(null);
+          continue;
+        }
+        HUB.saveKey(k.pass);
+        if (HUB.keyFromHash(location.hash) !== k.pass) {
+          history.replaceState(null, '', location.pathname + location.search + '#k=' + encodeURIComponent(k.pass));
+        }
+        root.hidden = true;
+        opts.onOpen(manifest, k.pass);
+        return true;
       }
-      HUB.saveKey(pass);
-      root.hidden = true;
-      opts.onOpen(manifest, pass);
+      ask(linkFailed ? '링크의 비밀번호가 맞지 않습니다. 비밀번호를 직접 입력해 주세요.' : '비밀번호가 맞지 않습니다.', true);
+      return false;
     }
-    form.addEventListener('submit', function (ev) { ev.preventDefault(); var v = pw.value.trim(); if (v) attempt(v, false); });
-    var link = HUB.keyFromHash(location.hash), saved = HUB.savedKey();
-    if (link) attempt(link, true);
-    else if (saved) attempt(saved, false);
+    form.addEventListener('submit', function (ev) { ev.preventDefault(); var v = pw.value.trim(); if (v) attempt([{ pass: v }]); });
+    var link = HUB.keyFromHash(location.hash), saved = HUB.savedKey(), keys = [];
+    if (link) keys.push({ pass: link, link: true });
+    if (saved && saved !== link) keys.push({ pass: saved });
+    if (keys.length) attempt(keys);
     else ask('팀에서 받은 비밀번호를 입력해 주세요.');
   };
 

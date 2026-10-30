@@ -48,7 +48,8 @@ h2 .n{margin-left:6px;color:var(--ink-3);font-weight:500}
 .chip b{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
 .chip.fresh{box-shadow:inset 0 0 0 1px var(--accent);color:var(--ink)}
 .recent{list-style:none;margin:0;padding:0;display:grid;gap:3px}
-.recent a{display:grid;grid-template-columns:8px 78px 1fr;align-items:baseline;gap:8px;padding:3px 0;font-size:12.5px;border-radius:6px}
+.recent a,.recent .row{display:grid;grid-template-columns:8px 78px 1fr;align-items:baseline;gap:8px;padding:3px 0;font-size:12.5px;border-radius:6px}
+.recent .gone{color:var(--ink-3)}
 .recent a:hover .t{text-decoration:underline;text-underline-offset:3px}
 .recent .when{color:var(--ink-3);font-variant-numeric:tabular-nums;font-size:12px}
 .recent .t{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -128,8 +129,11 @@ h2 .n{margin-left:6px;color:var(--ink-3);font-weight:500}
     $('built').textContent = m.built ? H.ago(m.built, now) + ' 업데이트' : '';
     $('app').hidden = false;
 
+    // 삭제된 게임(폴더가 사라짐)은 일정·보드에서 빼고, 최근 변경에는 남긴다(이전 판 링크가 계속 열리게).
+    var live = m.games.filter(function (g) { return !g.removed; });
+
     // 전체 일정
-    var rows = m.games.map(function (g) {
+    var rows = live.map(function (g) {
       return { label: H.iconHtml(g, 26, color[g.slug]) + '<span>' + esc(g.name) + '</span>', color: color[g.slug],
         items: g.schedule ? g.schedule.items : [], href: H.gameLink(g.slug, '일정') };
     });
@@ -139,8 +143,8 @@ h2 .n{margin-left:6px;color:var(--ink-3);font-weight:500}
     }
 
     // 게임 보드
-    $('game-count').textContent = m.games.length ? String(m.games.length) : '';
-    $('cards').innerHTML = m.games.length ? m.games.map(function (g) { return card(g, m.history, color[g.slug], today, now, docs); }).join('')
+    $('game-count').textContent = live.length ? String(live.length) : '';
+    $('cards').innerHTML = live.length ? live.map(function (g) { return card(g, m.history, color[g.slug], today, now, docs); }).join('')
       : '<p class="empty">아직 올라온 게임이 없습니다.</p>';
 
     // 최근 변경
@@ -181,6 +185,8 @@ h2 .n{margin-left:6px;color:var(--ink-3);font-weight:500}
     if (mine.length) {
       html += '<div class="card-part"><p class="part-label">최근 변경</p><ul class="recent">' + mine.map(function (h) {
         var d = docs[h.slug + '\n' + h.id];
+        var dot = '<i class="dot' + (H.isFresh(h.ts, now) ? ' on' : '') + '"></i><span class="when">' + H.stamp(h.ts) + '</span>';
+        if (h.note === '삭제됨') return '<li><span class="row">' + dot + '<span class="t gone">' + esc(d ? d.title : h.id) + '<span class="v">삭제됨</span></span></span></li>';
         var label = h.kind === 'schedule' ? '일정 갱신' : esc(d ? d.title : h.id) + '<span class="v">v' + h.v + '</span>';
         var href = h.kind === 'schedule' ? H.gameLink(g.slug, '일정') : d ? H.docLink(g.slug, d.category, h.id, h.v) : H.gameLink(g.slug);
         return '<li><a href="' + href + '"><i class="dot' + (H.isFresh(h.ts, now) ? ' on' : '') + '"></i><span class="when">' + H.stamp(h.ts) + '</span><span class="t">' + label + '</span></a></li>';
