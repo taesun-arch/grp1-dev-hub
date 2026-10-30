@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#101119">
+<title>GRP1 개발 허브</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
+<style>
+/* 첫 화면: 전체 일정(주인공) → 게임 보드 → 최근 변경. 공용 토큰·타임라인 CSS 는 hub.js 가 넣는다. */
+body{background:var(--stage,#101119)}
+.wrap{max-width:1320px;margin:0 auto;padding:0 var(--gutter) 56px}
+.top{display:flex;align-items:baseline;justify-content:space-between;gap:16px;padding:28px 0 22px}
+.brand{margin:0;font-size:19px;font-weight:600;letter-spacing:-.01em}
+.top p{margin:0;color:var(--ink-3);font-size:13px;white-space:nowrap}
+.top p b{color:var(--ink-2);font-weight:500;margin-right:10px}
+section{margin-top:34px}
+section:first-of-type{margin-top:0}
+h2{margin:0 0 12px;font-size:15px;font-weight:600;color:var(--ink)}
+h2 .n{margin-left:6px;color:var(--ink-3);font-weight:500}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:14px}
+.sched .panel{padding:10px 18px 4px}
+
+/* 게임 보드 */
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:16px}
+.card{display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:14px;transition:border-color .2s}
+.card:hover{border-color:color-mix(in srgb,var(--c) 45%,var(--line))}
+.card-head{display:flex;align-items:center;gap:12px;padding:16px 16px 14px}
+.card-head .nm{display:block;font:600 18px/1.15 var(--game);letter-spacing:.005em}
+.status{display:inline-block;margin-top:5px;padding:1px 8px;border-radius:999px;background:var(--surface-2);color:var(--ink-2);font-size:11.5px;font-weight:500}
+.card-part{padding:13px 16px;border-top:1px solid var(--line)}
+.part-label{margin:0 0 7px;color:var(--ink-3);font-size:12px}
+.dday{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.dday b{font:700 34px/1 var(--game);color:var(--c);letter-spacing:-.01em}
+.dday span{color:var(--ink-2);font-size:13px}
+.dday span em{font-style:normal;color:var(--ink-3);margin-left:4px;font-variant-numeric:tabular-nums}
+.phase{margin-top:11px;display:flex;justify-content:space-between;gap:10px;color:var(--ink-2);font-size:12.5px}
+.phase i{font-style:normal;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.prog{height:4px;margin-top:6px;border-radius:999px;background:var(--surface-2);overflow:hidden}
+.prog span{display:block;height:100%;border-radius:inherit;background:var(--c)}
+.none{margin:0;color:var(--ink-3);font-size:13px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:var(--surface-2);color:var(--ink-2);font-size:12.5px;transition:color .15s,background .15s}
+.chip:hover{color:var(--ink);background:#2b2f42}
+.chip b{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
+.chip.fresh{box-shadow:inset 0 0 0 1px var(--accent);color:var(--ink)}
+.recent{list-style:none;margin:0;padding:0;display:grid;gap:3px}
+.recent a{display:grid;grid-template-columns:8px 78px 1fr;align-items:baseline;gap:8px;padding:3px 0;font-size:12.5px;border-radius:6px}
+.recent a:hover .t{text-decoration:underline;text-underline-offset:3px}
+.recent .when{color:var(--ink-3);font-variant-numeric:tabular-nums;font-size:12px}
+.recent .t{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.recent .v{color:var(--ink-3);margin-left:5px;font-size:11.5px}
+.dot{width:7px;height:7px;border-radius:50%;align-self:center;box-shadow:inset 0 0 0 1px var(--ink-3)}
+.dot.on{background:var(--accent);box-shadow:none}
+
+/* 최근 변경 */
+.feed{list-style:none;margin:0;padding:4px 0}
+.feed li+li{border-top:1px solid var(--line-soft)}
+.feed a,.feed .row{display:grid;grid-template-columns:8px 92px minmax(120px,190px) 1fr;align-items:center;gap:12px;padding:10px 18px}
+.feed a:hover{background:rgba(255,255,255,.025)}
+.feed .when{color:var(--ink-3);font-size:12.5px;font-variant-numeric:tabular-nums}
+.feed .game{display:flex;align-items:center;gap:8px;min-width:0;font-weight:500}
+.feed .game span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.feed .what{min-width:0}
+.feed .path{color:var(--ink-3)}
+.feed .ttl{color:var(--ink)}
+.feed .v{display:inline-block;margin-left:6px;padding:0 6px;border-radius:5px;background:var(--surface-2);color:var(--ink-2);font-size:11px;font-variant-numeric:tabular-nums}
+.feed .note{margin-left:10px;color:var(--ink-2)}
+.feed .gone{color:var(--ink-3);text-decoration:line-through}
+.more{display:block;margin:10px auto 0;padding:8px 18px;border:1px solid var(--line);border-radius:999px;background:transparent;color:var(--ink-2);font:inherit;font-size:13px;cursor:pointer}
+.more:hover{color:var(--ink);border-color:var(--ink-3)}
+.more[hidden]{display:none}
+.empty{padding:40px 0;color:var(--ink-3);text-align:center}
+
+@media (max-width:640px){
+  .top{padding:20px 0 16px}
+  .feed a,.feed .row{grid-template-columns:8px 1fr;gap:2px 10px;padding:10px 14px}
+  .feed .when{grid-column:2}
+  .feed .game,.feed .what{grid-column:2}
+  .feed .dot{grid-row:1 / span 3}
+  .sched .panel{padding:8px 10px 2px}
+}
+</style>
+</head>
+<body>
+<div id="gate"></div>
+<div class="wrap" id="app" hidden>
+  <header class="top">
+    <h1 class="brand">GRP1 개발 허브</h1>
+    <p><b id="today"></b> <span id="built"></span></p>
+  </header>
+  <section class="sched" id="sched" hidden>
+    <h2>전체 일정</h2>
+    <div class="panel"><div id="timeline"></div></div>
+  </section>
+  <section>
+    <h2>게임<span class="n" id="game-count"></span></h2>
+    <div class="cards" id="cards"></div>
+  </section>
+  <section id="changes" hidden>
+    <h2>최근 변경</h2>
+    <div class="panel"><ol class="feed" id="feed"></ol></div>
+    <button class="more" id="more" type="button" hidden>더 보기</button>
+  </section>
+</div>
+<script src="hub.js"></script>
+<script>
+(function () {
+  'use strict';
+  var H = window.HUB, $ = function (id) { return document.getElementById(id); }, esc = H.escape;
+  var PAGE = 20;
+
+  H.gate({ title: 'GRP1 개발 허브', onOpen: function (m) {
+    Promise.all(m.games.map(function (g) { return H.iconColor(g.icon, g.slug); })).then(function (colors) { render(m, colors); });
+  } });
+
+  function render(m, colors) {
+    var today = H.todayKST(), now = Date.now();
+    var color = {}, game = {}, docs = {};
+    m.games.forEach(function (g, i) {
+      color[g.slug] = colors[i]; game[g.slug] = g;
+      g.categories.forEach(function (c) { c.docs.forEach(function (d) { docs[g.slug + '\n' + d.id] = { category: c.name, title: d.title, removed: d.removed }; }); });
+    });
+    $('today').textContent = H.todayLabel(now);
+    $('built').textContent = m.built ? H.ago(m.built, now) + ' 업데이트' : '';
+    $('app').hidden = false;
+
+    // 전체 일정
+    var rows = m.games.map(function (g) {
+      return { label: H.iconHtml(g, 26, color[g.slug]) + '<span>' + esc(g.name) + '</span>', color: color[g.slug],
+        items: g.schedule ? g.schedule.items : [], href: H.gameLink(g.slug, '일정') };
+    });
+    if (rows.some(function (r) { return r.items.length; })) {
+      $('sched').hidden = false;
+      H.timeline($('timeline'), rows, today, { compact: true, labelWidth: window.innerWidth < 640 ? 132 : 190 });
+    }
+
+    // 게임 보드
+    $('game-count').textContent = m.games.length ? String(m.games.length) : '';
+    $('cards').innerHTML = m.games.length ? m.games.map(function (g) { return card(g, m.history, color[g.slug], today, now, docs); }).join('')
+      : '<p class="empty">아직 올라온 게임이 없습니다.</p>';
+
+    // 최근 변경
+    var shown = 0;
+    function more() {
+      $('feed').insertAdjacentHTML('beforeend', m.history.slice(shown, shown + PAGE).map(function (h) { return feedRow(h, game, docs, color, now); }).join(''));
+      shown += PAGE;
+      $('more').hidden = shown >= m.history.length;
+    }
+    if (m.history.length) { $('changes').hidden = false; more(); $('more').addEventListener('click', more); }
+  }
+
+  function card(g, history, c, today, now, docs) {
+    var items = g.schedule ? g.schedule.items : [];
+    var ms = H.nextMilestone(items, today), ph = H.currentPhase(items, today);
+    var html = '<article class="card" style="--c:' + c + '">' +
+      '<a class="card-head" href="' + H.gameLink(g.slug) + '">' + H.iconHtml(g, 42, c) +
+      '<span><span class="nm">' + esc(g.name) + '</span><span class="status">' + esc(H.statusLabel(g.status)) + '</span></span></a>';
+
+    if (items.length) {
+      html += '<div class="card-part"><p class="part-label">다음 마일스톤</p>';
+      html += ms ? '<div class="dday"><b>' + H.ddayText(ms.days) + '</b><span>' + esc(ms.title) + '<em>' + H.md(ms.date) + '</em></span></div>'
+        : '<p class="none">남은 마일스톤이 없습니다.</p>';
+      if (ph) html += '<div class="phase"><span>지금 ' + esc(ph.title) + '</span><i>' + ph.day + ' / ' + ph.len + '일</i></div>' +
+        '<div class="prog"><span style="width:' + (ph.day / ph.len * 100).toFixed(1) + '%"></span></div>';
+      html += '</div>';
+    }
+
+    var cats = g.categories.map(function (cat) {
+      var live = cat.docs.filter(function (d) { return !d.removed; });
+      if (!live.length) return '';
+      var fresh = live.some(function (d) { return H.isFresh(d.versions[d.versions.length - 1].ts, now); });
+      return '<a class="chip' + (fresh ? ' fresh' : '') + '" href="' + H.gameLink(g.slug, cat.name) + '">' + esc(cat.name) + '<b>' + live.length + '</b></a>';
+    }).join('');
+    if (cats) html += '<div class="card-part"><p class="part-label">문서</p><div class="chips">' + cats + '</div></div>';
+
+    var mine = history.filter(function (h) { return h.slug === g.slug; }).slice(0, 3);
+    if (mine.length) {
+      html += '<div class="card-part"><p class="part-label">최근 변경</p><ul class="recent">' + mine.map(function (h) {
+        var d = docs[h.slug + '\n' + h.id];
+        var label = h.kind === 'schedule' ? '일정 갱신' : esc(d ? d.title : h.id) + '<span class="v">v' + h.v + '</span>';
+        var href = h.kind === 'schedule' ? H.gameLink(g.slug, '일정') : d ? H.docLink(g.slug, d.category, h.id, h.v) : H.gameLink(g.slug);
+        return '<li><a href="' + href + '"><i class="dot' + (H.isFresh(h.ts, now) ? ' on' : '') + '"></i><span class="when">' + H.stamp(h.ts) + '</span><span class="t">' + label + '</span></a></li>';
+      }).join('') + '</ul></div>';
+    }
+    if (!items.length && !cats && !mine.length) html += '<div class="card-part"><p class="none">아직 올라온 문서가 없습니다.</p></div>';
+    return html + '</article>';
+  }
+
+  function feedRow(h, game, docs, color, now) {
+    var g = game[h.slug];
+    if (!g) return '';
+    var who = '<span class="game">' + H.iconHtml(g, 20, color[h.slug]) + '<span>' + esc(g.name) + '</span></span>';
+    var dot = '<i class="dot' + (H.isFresh(h.ts, now) ? ' on' : '') + '"></i>';
+    var when = '<span class="when">' + H.stamp(h.ts) + '</span>';
+    var note = h.note && h.note !== '일정 갱신' ? '<span class="note">' + esc(h.note) + '</span>' : '';
+    if (h.kind === 'schedule') {
+      return '<li><a href="' + H.gameLink(h.slug, '일정') + '">' + dot + when + who + '<span class="what"><span class="ttl">일정 갱신</span>' + note + '</span></a></li>';
+    }
+    var d = docs[h.slug + '\n' + h.id] || { category: '', title: h.id };
+    var what = '<span class="what"><span class="path">' + esc(d.category) + ' / </span><span class="ttl' + (h.note === '삭제됨' ? ' gone' : '') + '">' +
+      esc(d.title) + '</span><span class="v">v' + h.v + '</span>' + note + '</span>';
+    if (h.note === '삭제됨') return '<li><div class="row">' + dot + when + who + what + '</div></li>';
+    return '<li><a href="' + H.docLink(h.slug, d.category, h.id, h.v) + '">' + dot + when + who + what + '</a></li>';
+  }
+})();
+</script>
+</body>
+</html>

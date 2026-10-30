@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#101119">
+<title>GRP1 개발 허브</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
+<style>
+/* 게임 화면: 왼쪽 탭(일정 · 문서 카테고리 · 변경 이력) + 오른쪽 내용. 문서는 목록 아래에서 펼쳐진다. */
+body{background:var(--stage,#101119)}
+.wrap{max-width:1320px;margin:0 auto;padding:0 var(--gutter) 56px}
+.top{padding:22px 0 24px}
+.back{display:inline-flex;align-items:center;gap:6px;color:var(--ink-3);font-size:13px;padding:4px 8px 4px 2px;border-radius:6px}
+.back:hover{color:var(--ink)}
+.back svg{width:14px;height:14px}
+.ident{display:flex;align-items:center;gap:16px;margin-top:14px}
+.ident h1{margin:0;font:600 clamp(24px,3.2vw,32px)/1.1 var(--game);letter-spacing:.005em}
+.ident .meta{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:6px;color:var(--ink-3);font-size:13px}
+.status{padding:1px 9px;border-radius:999px;background:var(--surface-2);color:var(--ink-2);font-size:12px;font-weight:500}
+
+.layout{display:grid;grid-template-columns:220px minmax(0,1fr);gap:28px;align-items:start}
+.tabs{position:sticky;top:16px;display:flex;flex-direction:column;gap:2px}
+.tab{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;padding:9px 12px;border:0;border-radius:9px;
+  background:transparent;color:var(--ink-2);font:inherit;font-size:14px;text-align:left;cursor:pointer;transition:background .15s,color .15s}
+.tab:hover{background:var(--surface);color:var(--ink)}
+.tab[aria-selected="true"]{background:var(--surface-2);color:var(--ink);font-weight:600;box-shadow:inset 3px 0 0 var(--c)}
+.tab .n{color:var(--ink-3);font-size:12px;font-weight:500;font-variant-numeric:tabular-nums}
+.tab .fresh{width:7px;height:7px;border-radius:50%;background:var(--accent);margin-left:auto;margin-right:2px}
+.tab-sep{height:1px;margin:8px 4px;background:var(--line)}
+
+.pane h2{margin:0 0 14px;font-size:20px;font-weight:600}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:14px}
+.sched-panel{padding:8px 16px 6px}
+.summary{display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px 36px;margin-bottom:16px}
+.summary .lbl{display:block;color:var(--ink-3);font-size:12px;margin-bottom:4px}
+.summary .dd{font:700 34px/1 var(--game);color:var(--c)}
+.summary .dd-t{margin-left:10px;color:var(--ink-2);font-size:13.5px}
+.summary .ph{color:var(--ink);font-size:14px}
+.summary .ph i{font-style:normal;color:var(--ink-3);margin-left:8px;font-variant-numeric:tabular-nums}
+.summary .prog{width:200px;height:4px;margin-top:8px;border-radius:999px;background:var(--surface-2);overflow:hidden}
+.summary .prog span{display:block;height:100%;background:var(--c)}
+.sub-h{margin:28px 0 10px;font-size:15px;font-weight:600}
+
+.docs{list-style:none;margin:0;padding:4px 0}
+.docs li+li{border-top:1px solid var(--line-soft)}
+.doc{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:6px 16px;width:100%;padding:12px 18px;border:0;background:transparent;
+  color:inherit;font:inherit;text-align:left;cursor:pointer;transition:background .15s}
+.doc:hover{background:rgba(255,255,255,.025)}
+.doc[aria-current="true"]{background:color-mix(in srgb,var(--c) 10%,transparent);box-shadow:inset 3px 0 0 var(--c)}
+.doc .ttl{font-size:15px;font-weight:500;color:var(--ink);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.doc .v{display:inline-block;margin-left:8px;padding:0 6px;border-radius:5px;background:var(--surface-2);color:var(--ink-2);font-size:11.5px;font-weight:500;vertical-align:1px}
+.doc .when{color:var(--ink-3);font-size:12.5px;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.doc .note{grid-column:1 / -1;color:var(--ink-2);font-size:13px}
+.doc.removed .ttl{color:var(--ink-3);text-decoration:line-through}
+.doc .gone{margin-left:8px;color:var(--ink-3);font-size:12px}
+.fresh-dot{display:inline-block;width:7px;height:7px;margin-right:8px;border-radius:50%;background:var(--accent);vertical-align:1px}
+
+.viewer{margin-top:18px;overflow:hidden}
+.viewer-head{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;padding:12px 14px 12px 18px;border-bottom:1px solid var(--line)}
+.viewer-head h3{margin:0;flex:1;min-width:160px;font-size:16px;font-weight:600}
+.viewer-head select{max-width:100%;padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:var(--stage);color:var(--ink);font:inherit;font-size:13px}
+.btn{padding:6px 12px;border:1px solid var(--line);border-radius:8px;background:transparent;color:var(--ink-2);font:inherit;font-size:13px;cursor:pointer}
+.btn:hover{color:var(--ink);border-color:var(--ink-3)}
+.frame-wrap{background:#fff;min-height:240px}
+.viewer iframe{display:block;width:100%;height:600px;border:0;background:#fff}
+.viewer .state{padding:40px 18px;color:var(--ink-3);text-align:center;background:var(--surface)}
+.viewer.full{position:fixed;inset:0;z-index:100;margin:0;border-radius:0;display:flex;flex-direction:column}
+.viewer.full .frame-wrap{flex:1;min-height:0}
+.viewer.full iframe{height:100%!important}
+
+.hist{list-style:none;margin:0;padding:4px 0}
+.hist li+li{border-top:1px solid var(--line-soft)}
+.hist button,.hist .row{display:grid;grid-template-columns:96px minmax(0,1fr);gap:12px;width:100%;padding:11px 18px;border:0;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.hist .row{cursor:default}
+.hist button:hover{background:rgba(255,255,255,.025)}
+.hist .when{color:var(--ink-3);font-size:12.5px;font-variant-numeric:tabular-nums}
+.hist .path{color:var(--ink-3)}
+.hist .v{margin-left:6px;padding:0 6px;border-radius:5px;background:var(--surface-2);color:var(--ink-2);font-size:11px}
+.hist .note{margin-left:10px;color:var(--ink-2)}
+.empty{padding:36px 18px;color:var(--ink-3);text-align:center}
+.missing{max-width:420px;margin:18vh auto 0;text-align:center;color:var(--ink-2)}
+.missing a{color:var(--accent)}
+
+@media (max-width:820px){
+  .layout{grid-template-columns:minmax(0,1fr);gap:18px}
+  .tabs{position:static;flex-direction:row;overflow-x:auto;gap:6px;padding-bottom:4px;scrollbar-width:none}
+  .tabs::-webkit-scrollbar{display:none}
+  .tab{width:auto;flex:none;padding:7px 12px;border-radius:999px;background:var(--surface);white-space:nowrap}
+  .tab[aria-selected="true"]{box-shadow:inset 0 0 0 1px var(--c)}
+  .tab-sep{display:none}
+  .doc{padding:12px 14px}
+  .hist button,.hist .row{grid-template-columns:minmax(0,1fr);gap:2px;padding:11px 14px}
+}
+</style>
+</head>
+<body>
+<div id="gate"></div>
+<div class="wrap" id="app" hidden>
+  <header class="top">
+    <a class="back" id="back" href="index.html"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3 5 8l5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>허브</a>
+    <div class="ident" id="ident"></div>
+  </header>
+  <div class="layout">
+    <nav class="tabs" id="tabs" role="tablist" aria-label="카테고리"></nav>
+    <main class="pane" id="pane"></main>
+  </div>
+</div>
+<script src="hub.js"></script>
+<script>
+(function () {
+  'use strict';
+  var H = window.HUB, $ = function (id) { return document.getElementById(id); }, esc = H.escape;
+  var SCHED = '일정', HISTORY = '변경 이력';
+  var G, M, PASS, COLOR, TODAY, NOW, TABS = [], state = { c: null, d: null, v: null }, timer = null;
+
+  H.gate({ title: 'GRP1 개발 허브', onOpen: function (m, pass) {
+    var q = H.parseQuery(location.search);
+    G = m.games.filter(function (g) { return g.slug === q.g; })[0];
+    if (!G) {
+      document.body.insertAdjacentHTML('beforeend', '<p class="missing">없는 게임입니다. <a href="index.html' + esc(H.hashSuffix()) + '">허브로 돌아가기</a></p>');
+      return;
+    }
+    M = m; PASS = pass; TODAY = H.todayKST(); NOW = Date.now();
+    H.iconColor(G.icon, G.slug).then(function (c) { COLOR = c; start(q); });
+  } });
+
+  function categoryOf(id) {
+    for (var i = 0; i < G.categories.length; i++) {
+      for (var j = 0; j < G.categories[i].docs.length; j++) if (G.categories[i].docs[j].id === id) return G.categories[i];
+    }
+    return null;
+  }
+  function findDoc(id) { var c = categoryOf(id); return c && c.docs.filter(function (d) { return d.id === id; })[0]; }
+  function tabOfCategory(name) { return name === SCHED ? SCHED : name; }
+  function latest(d) { return d.versions[d.versions.length - 1]; }
+
+  function start(q) {
+    document.documentElement.style.setProperty('--c', COLOR);
+    document.title = G.name + ' – GRP1 개발 허브';
+    $('back').href = 'index.html' + H.hashSuffix();
+    $('ident').innerHTML = H.iconHtml(G, 56, COLOR) + '<div><h1>' + esc(G.name) + '</h1><div class="meta"><span class="status">' +
+      esc(H.statusLabel(G.status)) + '</span>' + (G.updated ? '<span>마지막 갱신 ' + H.ago(G.updated, NOW) + '</span>' : '') + '</div></div>';
+
+    // 탭: 일정(일정이나 "일정" 카테고리가 있을 때) → 카테고리(가나다) → 변경 이력
+    var schedCat = G.categories.filter(function (c) { return c.name === SCHED; })[0];
+    if ((G.schedule && G.schedule.items.length) || schedCat) TABS.push({ key: SCHED, cat: schedCat, sched: true });
+    G.categories.forEach(function (c) { if (c.name !== SCHED) TABS.push({ key: c.name, cat: c }); });
+    var mine = M.history.filter(function (h) { return h.slug === G.slug; });
+    TABS.push({ key: HISTORY, history: mine });
+
+    $('tabs').innerHTML = TABS.map(function (t) {
+      var count = t.cat ? t.cat.docs.filter(function (d) { return !d.removed; }).length : 0;
+      var fresh = t.cat && t.cat.docs.some(function (d) { return !d.removed && H.isFresh(latest(d).ts, NOW); });
+      return (t.key === HISTORY ? '<div class="tab-sep"></div>' : '') +
+        '<button class="tab" role="tab" type="button" data-key="' + esc(t.key) + '" aria-selected="false"><span>' + esc(t.key) +
+        (count ? ' <span class="n">' + count + '</span>' : '') + '</span>' + (fresh ? '<span class="fresh" title="24시간 안에 바뀐 문서"></span>' : '') + '</button>';
+    }).join('');
+    $('tabs').addEventListener('click', function (ev) {
+      var b = ev.target.closest('.tab');
+      if (b) go({ c: b.dataset.key, d: null, v: null });
+    });
+    $('app').hidden = false;
+
+    apply(normalize(q));
+    history.replaceState(null, '', urlOf(state));
+    window.addEventListener('popstate', function () { apply(normalize(H.parseQuery(location.search))); });
+    document.addEventListener('keydown', function (ev) {
+      var v = document.querySelector('.viewer.full');
+      if (ev.key === 'Escape' && v) toggleFull(false);
+    });
+  }
+
+  // 주소의 c/d/v 를 실제로 있는 값으로 맞춘다.
+  function normalize(q) {
+    var s = { c: q.c, d: q.d, v: q.v };
+    if (s.d) {
+      var cat = categoryOf(s.d);
+      if (cat) s.c = tabOfCategory(cat.name); else s.d = null;
+    }
+    if (!TABS.some(function (t) { return t.key === s.c; })) { s.c = TABS[0].key; s.d = null; }
+    if (s.d && s.v && !findDoc(s.d).versions.some(function (x) { return x.v === s.v; })) s.v = null;
+    return s;
+  }
+  function urlOf(s) {
+    return 'game.html?g=' + encodeURIComponent(G.slug) + '&c=' + encodeURIComponent(s.c) + (s.d ? '&d=' + encodeURIComponent(s.d) : '') +
+      (s.d && s.v ? '&v=' + s.v : '') + H.hashSuffix();
+  }
+  function go(s) {
+    s = normalize(s);
+    if (s.c === state.c && s.d === state.d && s.v === state.v) return;
+    history.pushState(null, '', urlOf(s));
+    apply(s);
+  }
+
+  function apply(s) {
+    var tabChanged = s.c !== state.c;
+    state = s;
+    Array.prototype.forEach.call(document.querySelectorAll('.tab'), function (b) { b.setAttribute('aria-selected', String(b.dataset.key === s.c)); });
+    var tab = TABS.filter(function (t) { return t.key === s.c; })[0];
+    if (tabChanged || !$('pane').firstChild) renderTab(tab);
+    markCurrent();
+    renderViewer();
+  }
+
+  function renderTab(tab) {
+    var html = '';
+    if (tab.sched) {
+      html += '<h2>일정</h2>';
+      var items = G.schedule ? G.schedule.items : [];
+      if (items.length) {
+        var ms = H.nextMilestone(items, TODAY), ph = H.currentPhase(items, TODAY);
+        if (ms || ph) {
+          html += '<div class="summary">';
+          if (ms) html += '<div><span class="lbl">다음 마일스톤</span><span class="dd">' + H.ddayText(ms.days) + '</span><span class="dd-t">' + esc(ms.title) + ' ' + H.md(ms.date) + '</span></div>';
+          if (ph) html += '<div><span class="lbl">지금</span><span class="ph">' + esc(ph.title) + '<i>' + ph.day + ' / ' + ph.len + '일</i></span><div class="prog"><span style="width:' + (ph.day / ph.len * 100).toFixed(1) + '%"></span></div></div>';
+          html += '</div>';
+        }
+        html += '<div class="panel sched-panel"><div id="gantt"></div></div>';
+      }
+      if (tab.cat) html += '<h3 class="sub-h">일정 문서</h3>' + docList(tab.cat);
+    } else if (tab.history) {
+      html += '<h2>변경 이력</h2>' + (tab.history.length ? '<div class="panel"><ol class="hist">' + tab.history.map(histRow).join('') + '</ol></div>'
+        : '<p class="empty">아직 변경 이력이 없습니다.</p>');
+    } else {
+      html += '<h2>' + esc(tab.key) + '</h2>' + docList(tab.cat);
+    }
+    html += '<div id="viewer-slot"></div>';
+    $('pane').innerHTML = html;
+    if ($('gantt')) H.timeline($('gantt'), [{ label: '', color: COLOR, items: G.schedule.items }], TODAY, { compact: false, labelWidth: window.innerWidth < 640 ? 110 : 150 });
+
+    $('pane').onclick = function (ev) {
+      var b = ev.target.closest('[data-doc]');
+      if (b) go({ c: state.c, d: b.dataset.doc, v: b.dataset.v ? +b.dataset.v : null });
+    };
+  }
+
+  function docList(cat) {
+    if (!cat.docs.length) return '<p class="empty">아직 올라온 문서가 없습니다.</p>';
+    return '<div class="panel"><ul class="docs">' + cat.docs.map(function (d) {
+      var l = latest(d), fresh = !d.removed && H.isFresh(l.ts, NOW);
+      return '<li><button class="doc' + (d.removed ? ' removed' : '') + '" type="button" data-doc="' + esc(d.id) + '">' +
+        '<span class="ttl">' + (fresh ? '<i class="fresh-dot"></i>' : '') + esc(d.title) + '<span class="v">v' + l.v + '</span>' + (d.removed ? '<span class="gone">삭제됨</span>' : '') + '</span>' +
+        '<span class="when">' + H.stamp(l.ts) + '<br>' + H.ago(l.ts, NOW) + '</span>' +
+        (l.note ? '<span class="note">' + esc(l.note) + '</span>' : '') + '</button></li>';
+    }).join('') + '</ul></div>';
+  }
+
+  function histRow(h) {
+    var when = '<span class="when">' + H.stamp(h.ts) + '</span>';
+    var note = h.note && h.note !== '일정 갱신' ? '<span class="note">' + esc(h.note) + '</span>' : '';
+    if (h.kind === 'schedule') return '<li><div class="row">' + when + '<span>일정 갱신' + note + '</span></div></li>';
+    var cat = categoryOf(h.id), d = findDoc(h.id);
+    var what = '<span><span class="path">' + esc(cat ? cat.name : '') + ' / </span>' + esc(d ? d.title : h.id) + '<span class="v">v' + h.v + '</span>' + note + '</span>';
+    if (!d || h.note === '삭제됨') return '<li><div class="row">' + when + what + '</div></li>';
+    return '<li><button type="button" data-doc="' + esc(h.id) + '" data-v="' + h.v + '">' + when + what + '</button></li>';
+  }
+
+  function markCurrent() {
+    Array.prototype.forEach.call(document.querySelectorAll('.doc'), function (b) { b.setAttribute('aria-current', String(b.dataset.doc === state.d)); });
+  }
+
+  // 문서 뷰어: 목록 아래에 펼친다. 이력 탭에서 연 문서도 같은 자리에.
+  function renderViewer() {
+    clearInterval(timer);
+    var slot = $('viewer-slot');
+    if (!slot) return;
+    if (!state.d) { slot.innerHTML = ''; return; }
+    var d = findDoc(state.d), ver = state.v ? d.versions.filter(function (x) { return x.v === state.v; })[0] : latest(d);
+    var opts = d.versions.slice().reverse().map(function (x, i) {
+      return '<option value="' + x.v + '"' + (x.v === ver.v ? ' selected' : '') + '>v' + x.v + (i === 0 ? ' 최신' : '') + '  ' + H.stamp(x.ts) + (x.note ? '  ' + esc(x.note) : '') + '</option>';
+    }).join('');
+    slot.innerHTML = '<section class="panel viewer" id="viewer"><div class="viewer-head"><h3>' + esc(d.title) + '</h3>' +
+      '<select id="ver" aria-label="판 선택">' + opts + '</select>' +
+      '<button class="btn" type="button" id="full">전체 화면</button><button class="btn" type="button" id="close">닫기</button></div>' +
+      '<div class="frame-wrap" id="frame-wrap"><p class="state">여는 중…</p></div></section>';
+    $('ver').onchange = function () { var v = +this.value; go({ c: state.c, d: state.d, v: v === latest(d).v ? null : v }); };
+    $('close').onclick = function () { toggleFull(false); go({ c: state.c, d: null, v: null }); };
+    $('full').onclick = function () { toggleFull(!$('viewer').classList.contains('full')); };
+    if (!state.v || state.v === latest(d).v) slot.scrollIntoView({ block: 'nearest' });
+
+    var want = state.d + '/' + ver.v;
+    H.openDoc(ver.file, PASS).then(function (html) {
+      if (!$('frame-wrap') || state.d + '/' + (state.v || latest(d).v) !== want) return;   // 그 사이 다른 문서로 바뀜
+      var f = document.createElement('iframe');
+      f.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-modals');
+      f.title = d.title;
+      f.srcdoc = html;
+      f.onload = function () { wireLinks(f); fit(f); timer = setInterval(function () { fit(f); }, 1000); };
+      var wrap = $('frame-wrap'); wrap.innerHTML = ''; wrap.appendChild(f);
+    }, function () {
+      if ($('frame-wrap')) $('frame-wrap').innerHTML = '<p class="state">문서를 불러오지 못했습니다. 새로고침해 주세요.</p>';
+    });
+  }
+
+  // 문서 높이에 맞춰 iframe 을 늘린다(페이지 하나가 스크롤). 전체 화면에서는 CSS 가 높이를 정한다.
+  function fit(f) {
+    if (!f.isConnected) return clearInterval(timer);
+    try {
+      var doc = f.contentDocument, h = Math.max(doc.documentElement.scrollHeight, doc.body ? doc.body.scrollHeight : 0);
+      if (h && Math.abs(h - f.offsetHeight) > 2) f.style.height = Math.max(240, h) + 'px';
+    } catch (e) { clearInterval(timer); }
+  }
+  // iframe 이 문서 높이만큼 늘어나 있어 문서 안 목차(#앵커)가 움직이지 않는다 → 바깥 페이지를 그 위치로 스크롤한다.
+  // 전체 화면에서는 iframe 이 스스로 스크롤하므로 그대로 둔다. 외부 링크는 허브를 떠나지 않게 새 탭으로.
+  function wireLinks(f) {
+    var doc;
+    try { doc = f.contentDocument; } catch (e) { return; }
+    doc.addEventListener('click', function (ev) {
+      var a = ev.target.closest && ev.target.closest('a[href]');
+      if (!a || ev.defaultPrevented) return;
+      var raw = a.getAttribute('href');
+      if (raw.charAt(0) === '#') {
+        if ($('viewer').classList.contains('full')) return;
+        var name = decodeURIComponent(raw.slice(1));
+        var el = name ? doc.getElementById(name) || doc.getElementsByName(name)[0] : doc.body;
+        if (!el) return;
+        ev.preventDefault();
+        window.scrollTo({ top: window.scrollY + f.getBoundingClientRect().top + el.getBoundingClientRect().top - 16, behavior: 'smooth' });
+      } else if (!a.target && !/^javascript:/i.test(raw)) {
+        a.target = '_blank'; a.rel = 'noopener';
+      }
+    });
+  }
+  function toggleFull(on) {
+    var v = $('viewer');
+    if (!v) return;
+    v.classList.toggle('full', on);
+    document.body.style.overflow = on ? 'hidden' : '';
+    $('full').textContent = on ? '전체 화면 닫기' : '전체 화면';
+  }
+})();
+</script>
+</body>
+</html>
