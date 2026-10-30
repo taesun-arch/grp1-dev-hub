@@ -150,7 +150,33 @@
     return 'hsl(' + (h % 360) + ' 68% 64%)';
   };
 
-  // 아이콘에서 대표색을 뽑는다(채도 높은 픽셀 가중 평균). 막대 위 글자가 늘 읽히도록 밝기를 58~70% 로 맞춘다.
+  // RGBA 픽셀 배열에서 대표색을 고른다. 전체 평균을 내면 여러 색이 섞인 아이콘이 탁한 갈색·회색이 되므로,
+  // 색상환을 15° 칸 24개로 나눠 채도 가중치가 가장 큰 칸(양옆 칸 포함)의 평균색을 쓴다. 회색·검정·흰색은 후보에서 뺀다.
+  HUB.dominantColor = function (px) {
+    var bins = [], k;
+    for (k = 0; k < 24; k++) bins.push({ w: 0, r: 0, g: 0, b: 0 });
+    for (var i = 0; i < px.length; i += 4) {
+      if (px[i + 3] < 200) continue;
+      var r = px[i], g = px[i + 1], b = px[i + 2];
+      var mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn, l = (mx + mn) / 510;
+      if (d < 25 || l < 0.12 || l > 0.94) continue;
+      var s = d / 255 / (1 - Math.abs(2 * l - 1));
+      var h = mx === r ? ((g - b) / d + 6) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+      var bin = bins[Math.floor(h * 4) % 24], wt = s * s;
+      bin.w += wt; bin.r += r * wt; bin.g += g * wt; bin.b += b * wt;
+    }
+    var best = -1, bw = 0;
+    for (k = 0; k < 24; k++) {
+      var sw = bins[(k + 23) % 24].w + bins[k].w + bins[(k + 1) % 24].w;
+      if (sw > bw) { bw = sw; best = k; }
+    }
+    if (best < 0) return null;
+    var R = 0, G = 0, B = 0, W = 0;
+    [(best + 23) % 24, best, (best + 1) % 24].forEach(function (j) { R += bins[j].r; G += bins[j].g; B += bins[j].b; W += bins[j].w; });
+    return hslOf(R / W, G / W, B / W);
+  };
+
+  // 아이콘에서 대표색을 뽑는다. 막대 위 글자가 늘 읽히도록 밝기를 58~70% 로 맞춘다(hslOf).
   HUB.iconColor = function (dataUrl, slug) {
     var fallback = HUB.fallbackColor(slug);
     if (!dataUrl) return Promise.resolve(fallback);
@@ -160,15 +186,7 @@
         try {
           var c = document.createElement('canvas'); c.width = c.height = 48;
           var x = c.getContext('2d'); x.drawImage(img, 0, 0, 48, 48);
-          var px = x.getImageData(0, 0, 48, 48).data, r = 0, g = 0, b = 0, w = 0;
-          for (var i = 0; i < px.length; i += 4) {
-            if (px[i + 3] < 200) continue;
-            var mx = Math.max(px[i], px[i + 1], px[i + 2]), mn = Math.min(px[i], px[i + 1], px[i + 2]);
-            var wt = (mx - mn) / 255 + 0.02; wt *= wt;
-            r += px[i] * wt; g += px[i + 1] * wt; b += px[i + 2] * wt; w += wt;
-          }
-          if (!w) return ok(fallback);
-          ok(hslOf(r / w, g / w, b / w));
+          ok(HUB.dominantColor(x.getImageData(0, 0, 48, 48).data) || fallback);
         } catch (e) { ok(fallback); }
       };
       img.onerror = function () { ok(fallback); };
@@ -194,6 +212,20 @@
   };
 
   // ───────── 공용 타임라인 ─────────
+  // 마일스톤 이름표 배치(첫 화면, 게임당 한 줄). labels = [{ x: 가운데 px, w: 이름+날짜 폭, wShort: 날짜만 폭 }] — x 오름차순.
+  // 겹치지 않는 첫 줄(0 → 1)에 놓고, 두 줄 다 막히면 이름을 빼고 날짜만 다시 시도한다. 그래도 막히면 끝이 더 앞선 줄에 날짜만 둔다.
+  HUB.placeLabels = function (labels, gap) {
+    var ends = [-Infinity, -Infinity];
+    return labels.map(function (l) {
+      function fit(w) { for (var i = 0; i < 2; i++) if (l.x - w / 2 > ends[i] + gap) return i; return -1; }
+      var short = false, line = fit(l.w);
+      if (line < 0) { short = true; line = fit(l.wShort); }
+      if (line < 0) line = ends[0] <= ends[1] ? 0 : 1;
+      ends[line] = l.x + (short ? l.wShort : l.w) / 2;
+      return { line: line, short: short };
+    });
+  };
+
   // rows = [{ label: html, color, items, href? }]. compact: 게임당 한 줄(첫 화면), 아니면 항목마다 한 줄(게임 화면).
   HUB.timeline = function (el, rows, today, opts) {
     opts = opts || {};
@@ -210,27 +242,13 @@
     for (var n = r0; n < r0 + days; n++) {
       if (new Date(n * DAY).getUTCDay() !== 1) continue;
       grid += '<i class="tl-grid" style="left:' + pct(n) + '%"></i>';
-      // "오늘" 꼬리표(약 80px)와 겹치는 눈금 라벨은 숨긴다
-      if (Math.abs(n - t - 0.5) * pxDay > 62) head += '<span class="tl-tick" style="left:' + pct(n) + '%">' + md(n) + '</span>';
+      // "오늘" 꼬리표(약 80px)와 겹치는 눈금 라벨, 이름 열에 반쯤 가려지는 맨 앞 눈금 라벨은 숨긴다
+      if (Math.abs(n - t - 0.5) * pxDay > 62 && (n - r0) * pxDay > 20) head += '<span class="tl-tick" style="left:' + pct(n) + '%">' + md(n) + '</span>';
     }
     head += '<span class="tl-today-tag" style="left:' + pct(t + 0.5) + '%">오늘 ' + md(t) + '</span>';
     var now = '<i class="tl-now" style="left:' + pct(t + 0.5) + '%"></i>';
 
-    // 마일스톤 이름이 서로 겹치면 두 번째 줄로 내린다(대략 폭: 글자 13px + 날짜 58px).
-    function labelLines(items) {
-      var ends = [-Infinity, -Infinity], out = {};
-      items.filter(function (it) { return it.kind === 'milestone'; })
-        .sort(function (a, b) { return dn(a.date) - dn(b.date); })
-        .forEach(function (it) {
-          var cx = pct(dn(it.date) + 0.5) / 100 * trackPx, w = it.title.length * 13 + 58;
-          var line = cx - w / 2 > ends[0] + 8 ? 0 : 1;
-          ends[line] = cx + w / 2; out[it.title + it.date] = line;
-        });
-      return out;
-    }
-
     function shapes(items, color, mode, delay) {
-      var lines = mode === 'compact' ? labelLines(items) : {};
       return items.map(function (it) {
         var c = '--c:' + color + ';--d:' + delay + 'ms;';
         if (it.kind === 'phase') {
@@ -242,8 +260,7 @@
         var m = dn(it.date), x = pct(m + 0.5);
         var dia = '<span class="tl-dia' + (m < t ? ' past' : '') + '" title="' + HUB.escape(it.title + ' ' + md(m)) + '" style="' + c + 'left:' + x + '%"></span>';
         var name = mode === 'row-label' ? '' : '<b>' + HUB.escape(it.title) + '</b>';
-        var lc = mode === 'compact' ? ' l' + (lines[it.title + it.date] || 0) : '';
-        return dia + '<span class="tl-ml' + lc + (m < t ? ' past' : '') + '" style="' + c + 'left:' + x + '%">' + name + '<small>' + md(m) + '</small></span>';
+        return dia + '<span class="tl-ml' + (m < t ? ' past' : '') + '" data-p="' + x + '" style="' + c + 'left:' + x + '%">' + name + '<small>' + md(m) + '</small></span>';
       }).join('');
     }
 
@@ -263,6 +280,28 @@
     el.classList.add('tl');
     el.innerHTML = '<div class="tl-inner' + (opts.animate === false ? '' : ' tl-anim') + '" style="--lab:' + lab + 'px">' +
       '<div class="tl-row tl-headrow"><div class="tl-lab"></div><div class="tl-track">' + head + '</div></div>' + body + '</div>';
+    // 첫 화면: 그려진 이름표의 실제 폭을 재서 겹치지 않게 줄을 나눈다(글자 수 어림은 한글·숫자 폭 차이로 자주 틀린다).
+    // 웹폰트가 늦게 들어오면 폭이 바뀌므로 폰트 로드가 끝난 뒤 한 번 더 나눈다.
+    function placeAll() {
+      [].forEach.call(el.querySelectorAll('.tl-compact .tl-track'), function (tr) {
+        var tw = tr.clientWidth, mls = [].slice.call(tr.querySelectorAll('.tl-ml'));
+        mls.forEach(function (ml) { ml.classList.remove('l1', 'short'); });
+        var labels = mls.map(function (ml) {
+          var s = ml.querySelector('small');
+          return { x: parseFloat(ml.getAttribute('data-p')) / 100 * tw, w: ml.offsetWidth, wShort: s ? s.offsetWidth : ml.offsetWidth };
+        });
+        var order = labels.map(function (_, i) { return i; }).sort(function (a, b) { return labels[a].x - labels[b].x; });
+        HUB.placeLabels(order.map(function (i) { return labels[i]; }), 10).forEach(function (p, k) {
+          var ml = mls[order[k]];
+          if (p.line) ml.classList.add('l1');
+          if (p.short) ml.classList.add('short');
+        });
+      });
+    }
+    if (compact) {
+      placeAll();
+      if (document.fonts && document.fonts.ready) document.fonts.ready.then(placeAll);
+    }
     // 좁은 화면: 오늘 선이 고정된 이름 열 오른쪽, 보이는 구간의 1/5 지점에 오도록 가로 스크롤한다.
     var inner = el.firstChild;
     if (el.scrollWidth > el.clientWidth) {
@@ -336,7 +375,7 @@
     '.tl-today-tag{position:absolute;top:3px;transform:translateX(-50%);z-index:4;padding:1px 8px;border-radius:999px;background:var(--accent);color:var(--on-color);font-size:11.5px;font-weight:600;white-space:nowrap}',
     '.tl-row{position:relative;display:flex;height:40px;border-bottom:1px solid var(--line-soft)}',
     '.tl-row:last-child{border-bottom:0}',
-    '.tl-row.tl-compact{height:78px}',
+    '.tl-row.tl-compact{height:88px}',
     'a.tl-row{transition:background .15s}',
     'a.tl-row:hover{background:rgba(255,255,255,.028)}',
     '.tl-lab{flex:none;width:var(--lab);padding-right:14px;display:flex;align-items:center;gap:10px;min-width:0;font-size:13.5px;font-weight:500;',
@@ -348,7 +387,7 @@
     '.tl-now{position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;background:var(--accent);box-shadow:0 0 14px 1px rgba(138,162,255,.5);z-index:3}',
     '.tl-bar{position:absolute;top:50%;height:20px;margin-top:-10px;padding:0 8px;border-radius:6px;background:var(--c);color:var(--on-color);',
     'font-size:11.5px;font-weight:600;line-height:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transform-origin:left center}',
-    '.tl-compact .tl-bar,.tl-compact .tl-dia{top:20px}',
+    '.tl-compact .tl-bar,.tl-compact .tl-dia{top:24px}',
     '.tl-bar.past{opacity:.4}',
     '.tl-bar.done::after{content:" ✓"}',
     '.tl-note{font-weight:500}',
@@ -357,13 +396,18 @@
     '.tl-ml{position:absolute;top:50%;margin-top:-9px;padding-left:13px;line-height:18px;font-size:12px;white-space:nowrap;z-index:2;color:var(--ink)}',
     '.tl-ml b{font-weight:500}',
     '.tl-ml small{margin-left:5px;font-size:11px;color:var(--ink-3);font-variant-numeric:tabular-nums}',
-    // 첫 화면: 마일스톤 날짜가 가장 중요하다 — 다이아몬드를 키우고 날짜를 굵고 크게
-    '.tl-compact .tl-dia{width:16px;height:16px;margin:-8px 0 0 -8px}',
-    '.tl-compact .tl-ml{margin:0;padding:0;transform:translateX(-50%);top:33px;line-height:20px}',
-    '.tl-compact .tl-ml.l1{top:54px}',
-    '.tl-compact .tl-ml b{font-size:12.5px;font-weight:500;color:var(--ink-2)}',
-    '.tl-compact .tl-ml small{margin-left:6px;font:700 16px/20px var(--game);color:var(--ink);letter-spacing:-.01em}',
+    // 첫 화면: 마일스톤 날짜가 가장 중요하다. 마름모는 흰 바탕 + 게임 색 테두리로 — 같은 색 막대 끝에 붙어도 묻히지 않게.
+    '.tl-compact .tl-lab{font-size:15px;font-weight:600;gap:12px}',
+    '.tl-compact .tl-bar{height:24px;margin-top:-12px;padding:0 9px;border-radius:7px;font-size:12px;line-height:24px}',
+    '.tl-compact .tl-dia{width:20px;height:20px;margin:-10px 0 0 -10px;border:4px solid var(--c);border-radius:4px;background:var(--ink);box-shadow:0 0 0 3px var(--surface)}',
+    '.tl-compact .tl-ml{margin:0;padding:0;transform:translateX(-50%);top:42px;line-height:22px}',
+    '.tl-compact .tl-ml.l1{top:64px}',
+    '.tl-compact .tl-ml b{font-size:13px;font-weight:500;color:var(--ink-2)}',
+    '.tl-compact .tl-ml small{margin-left:6px;font:700 17px/22px var(--game);color:var(--ink);letter-spacing:-.01em}',
     '.tl-compact .tl-ml.past{opacity:.5}',
+    '.tl-compact .tl-ml.short b{display:none}',
+    '.tl-compact .tl-ml.short small{margin-left:0}',
+    '@media (max-width:640px){.tl-compact .tl-lab{font-size:13.5px;gap:9px}}',
     '.tl-empty{position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:12.5px;color:var(--ink-3)}',
     '.tl-anim .tl-bar{animation:tl-grow .75s var(--ease) both;animation-delay:var(--d)}',
     '.tl-anim .tl-dia,.tl-anim .tl-ml{animation:tl-fade .4s ease both;animation-delay:calc(var(--d) + .4s)}',
