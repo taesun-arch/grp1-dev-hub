@@ -122,6 +122,18 @@
       return { title: it.title, date: it.date, days: n - t, weekday: '일월화수목금토'.charAt(new Date(n * DAY).getUTCDay()) };
     }).sort(function (a, b) { return a.days - b.days; });
   };
+  // 첫 화면 게임 순서. 제목에 '런칭'이 든 마일스톤(여럿이면 가장 늦은 것)을 런칭일로 보고
+  // 런칭 전(당일 포함) 가까운 순 → 런칭일 없음 → 런칭 지남(최근 순). 같은 자리는 받은 순서(매니페스트의 order → 최근 갱신).
+  HUB.byLaunch = function (games, today) {
+    var t = dn(today);
+    return games.map(function (g, i) {
+      var n = null;
+      (g.schedule ? g.schedule.items : []).forEach(function (it) {
+        if (it.kind === 'milestone' && it.title.indexOf('런칭') >= 0 && (n === null || dn(it.date) > n)) n = dn(it.date);
+      });
+      return { g: g, i: i, grp: n === null ? 1 : n >= t ? 0 : 2, key: n === null ? 0 : n >= t ? n : -n };
+    }).sort(function (a, b) { return a.grp - b.grp || a.key - b.key || a.i - b.i; }).map(function (x) { return x.g; });
+  };
   HUB.ddayText = function (days) { return days === 0 ? 'D-day' : days < 0 ? 'D+' + -days : 'D-' + days; };
   HUB.md = function (date) { return md(dn(date)); };
 

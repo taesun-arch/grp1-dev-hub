@@ -115,8 +115,8 @@ a.keydates:hover{background:rgba(255,255,255,.02)}
     $('built').textContent = m.built ? H.ago(m.built, now) + ' 업데이트' : '';
     $('app').hidden = false;
 
-    // 삭제된 게임(폴더가 사라짐)은 첫 화면에서 뺀다(이전 판 링크는 계속 열린다).
-    var live = m.games.filter(function (g) { return !g.removed; });
+    // 삭제된 게임(폴더가 사라짐)은 첫 화면에서 뺀다(이전 판 링크는 계속 열린다). 순서는 런칭이 가까운 게임부터.
+    var live = H.byLaunch(m.games.filter(function (g) { return !g.removed; }), today);
 
     // 전체 일정
     var rows = live.map(function (g) {
