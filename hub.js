@@ -114,7 +114,15 @@
     }
     return null;
   };
-  HUB.ddayText = function (days) { return days === 0 ? 'D-day' : 'D-' + days; };
+  // 마일스톤 전부(지난 것 포함)를 날짜순으로. days 는 오늘 기준 남은 날(지났으면 음수).
+  HUB.milestones = function (items, today) {
+    var t = dn(today);
+    return items.filter(function (it) { return it.kind === 'milestone'; }).map(function (it) {
+      var n = dn(it.date);
+      return { title: it.title, date: it.date, days: n - t, weekday: '일월화수목금토'.charAt(new Date(n * DAY).getUTCDay()) };
+    }).sort(function (a, b) { return a.days - b.days; });
+  };
+  HUB.ddayText = function (days) { return days === 0 ? 'D-day' : days < 0 ? 'D+' + -days : 'D-' + days; };
   HUB.md = function (date) { return md(dn(date)); };
 
   // ───────── 주소 ─────────
@@ -208,13 +216,13 @@
     head += '<span class="tl-today-tag" style="left:' + pct(t + 0.5) + '%">오늘 ' + md(t) + '</span>';
     var now = '<i class="tl-now" style="left:' + pct(t + 0.5) + '%"></i>';
 
-    // 마일스톤 이름이 서로 겹치면 두 번째 줄로 내린다(대략 폭: 글자 12px + 날짜 40px).
+    // 마일스톤 이름이 서로 겹치면 두 번째 줄로 내린다(대략 폭: 글자 13px + 날짜 58px).
     function labelLines(items) {
       var ends = [-Infinity, -Infinity], out = {};
       items.filter(function (it) { return it.kind === 'milestone'; })
         .sort(function (a, b) { return dn(a.date) - dn(b.date); })
         .forEach(function (it) {
-          var cx = pct(dn(it.date) + 0.5) / 100 * trackPx, w = it.title.length * 12 + 44;
+          var cx = pct(dn(it.date) + 0.5) / 100 * trackPx, w = it.title.length * 13 + 58;
           var line = cx - w / 2 > ends[0] + 8 ? 0 : 1;
           ends[line] = cx + w / 2; out[it.title + it.date] = line;
         });
@@ -235,7 +243,7 @@
         var dia = '<span class="tl-dia' + (m < t ? ' past' : '') + '" title="' + HUB.escape(it.title + ' ' + md(m)) + '" style="' + c + 'left:' + x + '%"></span>';
         var name = mode === 'row-label' ? '' : '<b>' + HUB.escape(it.title) + '</b>';
         var lc = mode === 'compact' ? ' l' + (lines[it.title + it.date] || 0) : '';
-        return dia + '<span class="tl-ml' + lc + '" style="' + c + 'left:' + x + '%">' + name + '<small>' + md(m) + '</small></span>';
+        return dia + '<span class="tl-ml' + lc + (m < t ? ' past' : '') + '" style="' + c + 'left:' + x + '%">' + name + '<small>' + md(m) + '</small></span>';
       }).join('');
     }
 
@@ -328,7 +336,7 @@
     '.tl-today-tag{position:absolute;top:3px;transform:translateX(-50%);z-index:4;padding:1px 8px;border-radius:999px;background:var(--accent);color:var(--on-color);font-size:11.5px;font-weight:600;white-space:nowrap}',
     '.tl-row{position:relative;display:flex;height:40px;border-bottom:1px solid var(--line-soft)}',
     '.tl-row:last-child{border-bottom:0}',
-    '.tl-row.tl-compact{height:66px}',
+    '.tl-row.tl-compact{height:78px}',
     'a.tl-row{transition:background .15s}',
     'a.tl-row:hover{background:rgba(255,255,255,.028)}',
     '.tl-lab{flex:none;width:var(--lab);padding-right:14px;display:flex;align-items:center;gap:10px;min-width:0;font-size:13.5px;font-weight:500;',
@@ -349,8 +357,13 @@
     '.tl-ml{position:absolute;top:50%;margin-top:-9px;padding-left:13px;line-height:18px;font-size:12px;white-space:nowrap;z-index:2;color:var(--ink)}',
     '.tl-ml b{font-weight:500}',
     '.tl-ml small{margin-left:5px;font-size:11px;color:var(--ink-3);font-variant-numeric:tabular-nums}',
-    '.tl-compact .tl-ml{margin:0;padding:0;transform:translateX(-50%);top:32px}',
-    '.tl-compact .tl-ml.l1{top:47px}',
+    // 첫 화면: 마일스톤 날짜가 가장 중요하다 — 다이아몬드를 키우고 날짜를 굵고 크게
+    '.tl-compact .tl-dia{width:16px;height:16px;margin:-8px 0 0 -8px}',
+    '.tl-compact .tl-ml{margin:0;padding:0;transform:translateX(-50%);top:33px;line-height:20px}',
+    '.tl-compact .tl-ml.l1{top:54px}',
+    '.tl-compact .tl-ml b{font-size:12.5px;font-weight:500;color:var(--ink-2)}',
+    '.tl-compact .tl-ml small{margin-left:6px;font:700 16px/20px var(--game);color:var(--ink);letter-spacing:-.01em}',
+    '.tl-compact .tl-ml.past{opacity:.5}',
     '.tl-empty{position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:12.5px;color:var(--ink-3)}',
     '.tl-anim .tl-bar{animation:tl-grow .75s var(--ease) both;animation-delay:var(--d)}',
     '.tl-anim .tl-dia,.tl-anim .tl-ml{animation:tl-fade .4s ease both;animation-delay:calc(var(--d) + .4s)}',

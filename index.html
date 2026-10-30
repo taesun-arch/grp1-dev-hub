@@ -33,11 +33,18 @@ h2 .n{margin-left:6px;color:var(--ink-3);font-weight:500}
 .status{display:inline-block;margin-top:5px;padding:1px 8px;border-radius:999px;background:var(--surface-2);color:var(--ink-2);font-size:11.5px;font-weight:500}
 .card-part{padding:13px 16px;border-top:1px solid var(--line)}
 .part-label{margin:0 0 7px;color:var(--ink-3);font-size:12px}
-.dday{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
-.dday b{font:700 34px/1 var(--game);color:var(--c);letter-spacing:-.01em}
-.dday span{color:var(--ink-2);font-size:13px}
-.dday span em{font-style:normal;color:var(--ink-3);margin-left:4px;font-variant-numeric:tabular-nums}
-.phase{margin-top:11px;display:flex;justify-content:space-between;gap:10px;color:var(--ink-2);font-size:12.5px}
+/* 주요 날짜(마일스톤): 카드에서 가장 크게 보이는 정보 */
+.keydates{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:14px 18px;padding-top:15px;padding-bottom:15px}
+.kd-name{display:block;color:var(--ink-2);font-size:12.5px;font-weight:500}
+.kd-date{display:block;margin-top:3px;font:700 32px/1 var(--game);color:var(--ink);letter-spacing:-.015em;white-space:nowrap}
+.kd-date small{margin-left:6px;font:500 13px/1 var(--kr);color:var(--ink-3);letter-spacing:0}
+.kd-left{display:inline-block;margin-top:8px;padding:2px 9px;border-radius:999px;background:color-mix(in srgb,var(--c) 20%,transparent);color:color-mix(in srgb,var(--c) 55%,var(--ink));font:600 13px/1.4 var(--game)}
+.kd.next .kd-left{background:var(--c);color:var(--on-color)}
+.kd.past .kd-name,.kd.past .kd-date{color:var(--ink-3)}
+.kd.past .kd-left{background:var(--surface-2);color:var(--ink-3)}
+a.keydates{transition:background .15s}
+a.keydates:hover{background:rgba(255,255,255,.02)}
+.phase{margin-top:0;display:flex;justify-content:space-between;gap:10px;color:var(--ink-2);font-size:12.5px}
 .phase i{font-style:normal;color:var(--ink-3);font-variant-numeric:tabular-nums}
 .prog{height:4px;margin-top:6px;border-radius:999px;background:var(--surface-2);overflow:hidden}
 .prog span{display:block;height:100%;border-radius:inherit;background:var(--c)}
@@ -159,18 +166,23 @@ h2 .n{margin-left:6px;color:var(--ink-3);font-weight:500}
 
   function card(g, history, c, today, now, docs) {
     var items = g.schedule ? g.schedule.items : [];
-    var ms = H.nextMilestone(items, today), ph = H.currentPhase(items, today);
+    var ms = H.milestones(items, today), ph = H.currentPhase(items, today);
     var html = '<article class="card" style="--c:' + c + '">' +
       '<a class="card-head" href="' + H.gameLink(g.slug) + '">' + H.iconHtml(g, 42, c) +
       '<span><span class="nm">' + esc(g.name) + '</span><span class="status">' + esc(H.statusLabel(g.status)) + '</span></span></a>';
 
-    if (items.length) {
-      html += '<div class="card-part"><p class="part-label">다음 마일스톤</p>';
-      html += ms ? '<div class="dday"><b>' + H.ddayText(ms.days) + '</b><span>' + esc(ms.title) + '<em>' + H.md(ms.date) + '</em></span></div>'
-        : '<p class="none">남은 마일스톤이 없습니다.</p>';
-      if (ph) html += '<div class="phase"><span>지금 ' + esc(ph.title) + '</span><i>' + ph.day + ' / ' + ph.len + '일</i></div>' +
-        '<div class="prog"><span style="width:' + (ph.day / ph.len * 100).toFixed(1) + '%"></span></div>';
-      html += '</div>';
+    // 개발 완료·런칭 같은 마일스톤 날짜를 크게. 가장 가까운 것은 D-day 를 게임 색으로 채우고, 지난 것은 흐리게 D+n.
+    if (ms.length) {
+      var next = ms.filter(function (m) { return m.days >= 0; })[0];
+      html += '<a class="card-part keydates" href="' + H.gameLink(g.slug, '일정') + '">' + ms.map(function (m) {
+        return '<span class="kd' + (m.days < 0 ? ' past' : m === next ? ' next' : '') + '"><span class="kd-name">' + esc(m.title) + '</span>' +
+          '<span class="kd-date">' + H.md(m.date) + '<small>' + m.weekday + '</small></span>' +
+          '<span class="kd-left">' + H.ddayText(m.days) + '</span></span>';
+      }).join('') + '</a>';
+    }
+    if (ph) {
+      html += '<div class="card-part"><div class="phase"><span>지금 ' + esc(ph.title) + '</span><i>' + ph.day + ' / ' + ph.len + '일</i></div>' +
+        '<div class="prog"><span style="width:' + (ph.day / ph.len * 100).toFixed(1) + '%"></span></div></div>';
     }
 
     var cats = g.categories.map(function (cat) {
