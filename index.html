@@ -63,32 +63,10 @@ a.keydates:hover{background:rgba(255,255,255,.02)}
 .recent .v{color:var(--ink-3);margin-left:5px;font-size:11.5px}
 .dot{width:7px;height:7px;border-radius:50%;align-self:center;box-shadow:inset 0 0 0 1px var(--ink-3)}
 .dot.on{background:var(--accent);box-shadow:none}
-
-/* 최근 변경 */
-.feed{list-style:none;margin:0;padding:4px 0}
-.feed li+li{border-top:1px solid var(--line-soft)}
-.feed a,.feed .row{display:grid;grid-template-columns:8px 92px minmax(120px,190px) 1fr;align-items:center;gap:12px;padding:10px 18px}
-.feed a:hover{background:rgba(255,255,255,.025)}
-.feed .when{color:var(--ink-3);font-size:12.5px;font-variant-numeric:tabular-nums}
-.feed .game{display:flex;align-items:center;gap:8px;min-width:0;font-weight:500}
-.feed .game span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.feed .what{min-width:0}
-.feed .path{color:var(--ink-3)}
-.feed .ttl{color:var(--ink)}
-.feed .v{display:inline-block;margin-left:6px;padding:0 6px;border-radius:5px;background:var(--surface-2);color:var(--ink-2);font-size:11px;font-variant-numeric:tabular-nums}
-.feed .note{margin-left:10px;color:var(--ink-2)}
-.feed .gone{color:var(--ink-3);text-decoration:line-through}
-.more{display:block;margin:10px auto 0;padding:8px 18px;border:1px solid var(--line);border-radius:999px;background:transparent;color:var(--ink-2);font:inherit;font-size:13px;cursor:pointer}
-.more:hover{color:var(--ink);border-color:var(--ink-3)}
-.more[hidden]{display:none}
 .empty{padding:40px 0;color:var(--ink-3);text-align:center}
 
 @media (max-width:640px){
   .top{padding:20px 0 16px}
-  .feed a,.feed .row{grid-template-columns:8px 1fr;gap:2px 10px;padding:10px 14px}
-  .feed .when{grid-column:2}
-  .feed .game,.feed .what{grid-column:2}
-  .feed .dot{grid-row:1 / span 3}
   .sched .panel{padding:8px 10px 2px}
 }
 </style>
@@ -108,18 +86,12 @@ a.keydates:hover{background:rgba(255,255,255,.02)}
     <h2>게임<span class="n" id="game-count"></span></h2>
     <div class="cards" id="cards"></div>
   </section>
-  <section id="changes" hidden>
-    <h2>최근 변경</h2>
-    <div class="panel"><ol class="feed" id="feed"></ol></div>
-    <button class="more" id="more" type="button" hidden>더 보기</button>
-  </section>
 </div>
 <script src="hub.js"></script>
 <script>
 (function () {
   'use strict';
   var H = window.HUB, $ = function (id) { return document.getElementById(id); }, esc = H.escape;
-  var PAGE = 20;
 
   H.gate({ title: 'GRP1 개발 허브', onOpen: function (m) {
     Promise.all(m.games.map(function (g) { return H.iconColor(g.icon, g.slug); })).then(function (colors) { render(m, colors); });
@@ -127,16 +99,16 @@ a.keydates:hover{background:rgba(255,255,255,.02)}
 
   function render(m, colors) {
     var today = H.todayKST(), now = Date.now();
-    var color = {}, game = {}, docs = {};
+    var color = {}, docs = {};
     m.games.forEach(function (g, i) {
-      color[g.slug] = colors[i]; game[g.slug] = g;
+      color[g.slug] = colors[i];
       g.categories.forEach(function (c) { c.docs.forEach(function (d) { docs[g.slug + '\n' + d.id] = { category: c.name, title: d.title, removed: d.removed }; }); });
     });
     $('today').textContent = H.todayLabel(now);
     $('built').textContent = m.built ? H.ago(m.built, now) + ' 업데이트' : '';
     $('app').hidden = false;
 
-    // 삭제된 게임(폴더가 사라짐)은 일정·보드에서 빼고, 최근 변경에는 남긴다(이전 판 링크가 계속 열리게).
+    // 삭제된 게임(폴더가 사라짐)은 첫 화면에서 뺀다(이전 판 링크는 계속 열린다).
     var live = m.games.filter(function (g) { return !g.removed; });
 
     // 전체 일정
@@ -153,15 +125,6 @@ a.keydates:hover{background:rgba(255,255,255,.02)}
     $('game-count').textContent = live.length ? String(live.length) : '';
     $('cards').innerHTML = live.length ? live.map(function (g) { return card(g, m.history, color[g.slug], today, now, docs); }).join('')
       : '<p class="empty">아직 올라온 게임이 없습니다.</p>';
-
-    // 최근 변경
-    var shown = 0;
-    function more() {
-      $('feed').insertAdjacentHTML('beforeend', m.history.slice(shown, shown + PAGE).map(function (h) { return feedRow(h, game, docs, color, now); }).join(''));
-      shown += PAGE;
-      $('more').hidden = shown >= m.history.length;
-    }
-    if (m.history.length) { $('changes').hidden = false; more(); $('more').addEventListener('click', more); }
   }
 
   function card(g, history, c, today, now, docs) {
@@ -206,23 +169,6 @@ a.keydates:hover{background:rgba(255,255,255,.02)}
     }
     if (!items.length && !cats && !mine.length) html += '<div class="card-part"><p class="none">아직 올라온 문서가 없습니다.</p></div>';
     return html + '</article>';
-  }
-
-  function feedRow(h, game, docs, color, now) {
-    var g = game[h.slug];
-    if (!g) return '';
-    var who = '<span class="game">' + H.iconHtml(g, 20, color[h.slug]) + '<span>' + esc(g.name) + '</span></span>';
-    var dot = '<i class="dot' + (H.isFresh(h.ts, now) ? ' on' : '') + '"></i>';
-    var when = '<span class="when">' + H.stamp(h.ts) + '</span>';
-    var note = h.note && h.note !== '일정 갱신' ? '<span class="note">' + esc(h.note) + '</span>' : '';
-    if (h.kind === 'schedule') {
-      return '<li><a href="' + H.gameLink(h.slug, '일정') + '">' + dot + when + who + '<span class="what"><span class="ttl">일정 갱신</span>' + note + '</span></a></li>';
-    }
-    var d = docs[h.slug + '\n' + h.id] || { category: '', title: h.id };
-    var what = '<span class="what"><span class="path">' + esc(d.category) + ' / </span><span class="ttl' + (h.note === '삭제됨' ? ' gone' : '') + '">' +
-      esc(d.title) + '</span><span class="v">v' + h.v + '</span>' + note + '</span>';
-    if (h.note === '삭제됨') return '<li><div class="row">' + dot + when + who + what + '</div></li>';
-    return '<li><a href="' + H.docLink(h.slug, d.category, h.id, h.v) + '">' + dot + when + who + what + '</a></li>';
   }
 })();
 </script>
