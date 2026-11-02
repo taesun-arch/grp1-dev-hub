@@ -21,6 +21,8 @@ section{margin-top:44px}
 section:first-of-type{margin-top:0}
 h2{margin:0 0 14px;font-size:18px;font-weight:600;letter-spacing:-.01em;color:var(--ink)}
 h2 .n{margin-left:7px;color:var(--ink-3);font-weight:500}
+.sec-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
+.sec-head h2{margin:0}
 .panel{background:var(--surface);border:1px solid var(--line);border-radius:16px}
 .sched .panel{padding:12px 20px 6px}
 
@@ -86,7 +88,7 @@ a.keydates:hover{background:rgba(255,255,255,.02)}
     <p><b id="today"></b> <span id="built"></span></p>
   </header>
   <section class="sched" id="sched" hidden>
-    <h2>전체 일정</h2>
+    <div class="sec-head"><h2>전체 일정</h2><button class="tl-wk" id="wk" type="button" aria-pressed="false">주말 표시</button></div>
     <div class="panel"><div id="timeline"></div></div>
   </section>
   <section>
@@ -94,18 +96,23 @@ a.keydates:hover{background:rgba(255,255,255,.02)}
     <div class="cards" id="cards"></div>
   </section>
 </div>
-<script src="hub.js?v=8d3632d87d"></script>
+<script src="hub.js?v=20c8a76350"></script>
 <script>
 (function () {
   'use strict';
   var H = window.HUB, $ = function (id) { return document.getElementById(id); }, esc = H.escape;
 
   H.gate({ title: 'GRP1 개발 허브', onOpen: function (m) {
-    Promise.all(m.games.map(function (g) { return H.iconColor(g.icon, g.slug); })).then(function (colors) { render(m, colors); });
+    Promise.all(m.games.map(function (g) { return H.iconColor(g.icon, g.slug); })).then(function (colors) {
+      render(m, colors, true);
+      // 주말 표시를 바꾸면 간트와 카드의 진행도(평일/달력 일수)를 애니메이션 없이 다시 그린다
+      $('wk').addEventListener('click', function () { H.setWeekendsShown(!H.weekendsShown()); render(m, colors, false); });
+    });
   } });
 
-  function render(m, colors) {
-    var today = H.todayKST(), now = Date.now();
+  function render(m, colors, animate) {
+    var today = H.todayKST(), now = Date.now(), wk = H.weekendsShown();
+    $('wk').setAttribute('aria-pressed', String(wk));
     var color = {}, docs = {};
     m.games.forEach(function (g, i) {
       color[g.slug] = colors[i];
@@ -125,18 +132,18 @@ a.keydates:hover{background:rgba(255,255,255,.02)}
     });
     if (rows.some(function (r) { return r.items.length; })) {
       $('sched').hidden = false;
-      H.timeline($('timeline'), rows, today, { compact: true, labelWidth: window.innerWidth < 640 ? 140 : 220 });
+      H.timeline($('timeline'), rows, today, { compact: true, labelWidth: window.innerWidth < 640 ? 140 : 220, weekends: wk, animate: animate });
     }
 
     // 게임 보드
     $('game-count').textContent = live.length ? String(live.length) : '';
-    $('cards').innerHTML = live.length ? live.map(function (g) { return card(g, m.history, color[g.slug], today, now, docs); }).join('')
+    $('cards').innerHTML = live.length ? live.map(function (g) { return card(g, m.history, color[g.slug], today, now, docs, wk); }).join('')
       : '<p class="empty">아직 올라온 게임이 없습니다.</p>';
   }
 
-  function card(g, history, c, today, now, docs) {
+  function card(g, history, c, today, now, docs, wk) {
     var items = g.schedule ? g.schedule.items : [];
-    var ms = H.milestones(items, today), ph = H.currentPhase(items, today);
+    var ms = H.milestones(items, today), ph = H.currentPhase(items, today, !wk);
     var html = '<article class="card" style="--c:' + c + '">' +
       '<a class="card-head" href="' + H.gameLink(g.slug) + '">' + H.iconHtml(g, 48, c) +
       '<span><span class="nm">' + esc(g.name) + '</span><span class="status">' + esc(H.statusLabel(g.status)) + '</span></span></a>';

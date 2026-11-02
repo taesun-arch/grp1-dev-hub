@@ -106,13 +106,50 @@
     });
     return best && { title: best.title, date: best.date, days: best.n - t };
   };
-  HUB.currentPhase = function (items, today) {
+  // 지금 진행 중인 기간과 그 안의 몇째 날인지. hideWeekends 면 평일만 센다(주말 당일은 직전 평일까지 센 값).
+  // 주말에만 걸친 기간은 평일이 0일이라 달력 일수로 대신 센다.
+  HUB.currentPhase = function (items, today, hideWeekends) {
     var t = dn(today);
     for (var i = 0; i < items.length; i++) {
       var it = items[i];
-      if (it.kind === 'phase' && t >= dn(it.start) && t <= dn(it.end)) return { title: it.title, day: t - dn(it.start) + 1, len: dn(it.end) - dn(it.start) + 1 };
+      if (it.kind !== 'phase') continue;
+      var a = dn(it.start), b = dn(it.end);
+      if (t < a || t > b) continue;
+      var len = countDays(a, b, hideWeekends);
+      return len ? { title: it.title, day: countDays(a, t, hideWeekends), len: len } : { title: it.title, day: t - a + 1, len: b - a + 1 };
     }
     return null;
+  };
+  function isWeekend(n) { var w = new Date(n * DAY).getUTCDay(); return w === 0 || w === 6; }
+  function countDays(a, b, hideWeekends) {
+    for (var c = 0, n = a; n <= b; n++) if (!(hideWeekends && isWeekend(n))) c++;
+    return c;
+  }
+  // 간트의 날짜 축. start 부터 days 일. hideWeekends 면 토·일을 폭 0 으로 접는다 —
+  // 주말 날짜는 직전 금요일 끝(= 다음 월요일 시작) 경계에 놓인다. pos(날짜 또는 일 번호, 그날 안의 비율 0~1) → 축 위치(보이는 하루 = 1).
+  HUB.dayAxis = function (start, days, hideWeekends) {
+    var r0 = dn(start), cum = [0];
+    for (var k = 0; k < days; k++) cum.push(cum[k] + (hideWeekends && isWeekend(r0 + k) ? 0 : 1));
+    return {
+      width: cum[days],
+      pos: function (n, f) {
+        if (typeof n === 'string') n = dn(n);
+        var i = n - r0;
+        if (i < 0) return 0;
+        if (i >= days) return cum[days];
+        return cum[i] + (hideWeekends && isWeekend(n) ? 0 : f || 0);
+      },
+    };
+  };
+  // 주말 표시 토글(보는 사람마다 기억). 기본은 주말을 뺀다. 저장이 막힌 환경에서도 토글은 그 화면 안에서 동작한다.
+  var WEEKEND_STORE = 'hub-weekends', weekends = null;
+  HUB.weekendsShown = function () {
+    if (weekends === null) { try { weekends = localStorage.getItem(WEEKEND_STORE) === '1'; } catch (e) { weekends = false; } }
+    return weekends;
+  };
+  HUB.setWeekendsShown = function (on) {
+    weekends = !!on;
+    try { if (on) localStorage.setItem(WEEKEND_STORE, '1'); else localStorage.removeItem(WEEKEND_STORE); } catch (e) { /* 저장 불가 환경 */ }
   };
   // 마일스톤 전부(지난 것 포함)를 날짜순으로. days 는 오늘 기준 남은 날(지났으면 음수).
   HUB.milestones = function (items, today) {
@@ -239,26 +276,30 @@
   };
 
   // rows = [{ label: html, color, items, href? }]. compact: 게임당 한 줄(첫 화면), 아니면 항목마다 한 줄(게임 화면).
+  // weekends: true 면 토·일도 칸을 차지하고 옅게 칠한다. 기본은 주말을 접어 평일만 보인다(주 경계 = 월요일 눈금).
   HUB.timeline = function (el, rows, today, opts) {
     opts = opts || {};
     var all = [];
     rows.forEach(function (r) { all = all.concat(r.items); });
     var rg = HUB.ganttRange(all, today), r0 = dn(rg.start), days = rg.days, t = dn(today);
-    var pct = function (n) { return (n - r0) / days * 100; };
+    var showWk = !!opts.weekends, ax = HUB.dayAxis(rg.start, days, !showWk);
+    var pct = function (n, f) { return ax.pos(n, f) / ax.width * 100; };
     var compact = !!opts.compact;
     var lab = opts.labelWidth || 180;
 
-    var trackPx = Math.max(760, el.clientWidth || 760) - lab, pxDay = trackPx / days;
+    var trackPx = Math.max(760, el.clientWidth || 760) - lab, pxUnit = trackPx / ax.width;
     var grid = '';
     var head = '';
     for (var n = r0; n < r0 + days; n++) {
-      if (new Date(n * DAY).getUTCDay() !== 1) continue;
-      grid += '<i class="tl-grid" style="left:' + pct(n) + '%"></i>';
+      var wd = new Date(n * DAY).getUTCDay();
+      if (showWk && (wd === 0 || wd === 6)) grid += '<i class="tl-wkend" style="left:' + pct(n, 0) + '%;width:' + (pct(n, 1) - pct(n, 0)) + '%"></i>';
+      if (wd !== 1) continue;
+      grid += '<i class="tl-grid" style="left:' + pct(n, 0) + '%"></i>';
       // "오늘" 꼬리표(약 80px)와 겹치는 눈금 라벨, 이름 열에 반쯤 가려지는 맨 앞 눈금 라벨은 숨긴다
-      if (Math.abs(n - t - 0.5) * pxDay > 62 && (n - r0) * pxDay > 20) head += '<span class="tl-tick" style="left:' + pct(n) + '%">' + md(n) + '</span>';
+      if (Math.abs(ax.pos(n, 0) - ax.pos(t, 0.5)) * pxUnit > 62 && ax.pos(n, 0) * pxUnit > 20) head += '<span class="tl-tick" style="left:' + pct(n, 0) + '%">' + md(n) + '</span>';
     }
-    head += '<span class="tl-today-tag" style="left:' + pct(t + 0.5) + '%">오늘 ' + md(t) + '</span>';
-    var now = '<i class="tl-now" style="left:' + pct(t + 0.5) + '%"></i>';
+    head += '<span class="tl-today-tag" style="left:' + pct(t, 0.5) + '%">오늘 ' + md(t) + '</span>';
+    var now = '<i class="tl-now" style="left:' + pct(t, 0.5) + '%"></i>';
 
     function shapes(items, color, mode, delay) {
       return items.map(function (it) {
@@ -267,9 +308,9 @@
           var a = dn(it.start), b = dn(it.end);
           var cls = 'tl-bar' + (b < t ? ' past' : '') + (it.done ? ' done' : '');
           var text = mode === 'row-label' ? (it.note ? '<span class="tl-note">' + HUB.escape(it.note) + '</span>' : '') : HUB.escape(it.title);
-          return '<span class="' + cls + '" title="' + HUB.escape(it.title + ' ' + md(a) + '–' + md(b)) + '" style="' + c + 'left:' + pct(a) + '%;width:' + (pct(b + 1) - pct(a)) + '%">' + text + '</span>';
+          return '<span class="' + cls + '" title="' + HUB.escape(it.title + ' ' + md(a) + '–' + md(b)) + '" style="' + c + 'left:' + pct(a, 0) + '%;width:' + (pct(b, 1) - pct(a, 0)) + '%">' + text + '</span>';
         }
-        var m = dn(it.date), x = pct(m + 0.5);
+        var m = dn(it.date), x = pct(m, 0.5);
         var dia = '<span class="tl-dia' + (m < t ? ' past' : '') + '" title="' + HUB.escape(it.title + ' ' + md(m)) + '" style="' + c + 'left:' + x + '%"></span>';
         var name = mode === 'row-label' ? '' : '<b>' + HUB.escape(it.title) + '</b>';
         return dia + '<span class="tl-ml' + (m < t ? ' past' : '') + '" data-p="' + x + '" style="' + c + 'left:' + x + '%">' + name + '<small>' + md(m) + '</small></span>';
@@ -317,7 +358,7 @@
     // 좁은 화면: 오늘 선이 고정된 이름 열 오른쪽, 보이는 구간의 1/5 지점에 오도록 가로 스크롤한다.
     var inner = el.firstChild;
     if (el.scrollWidth > el.clientWidth) {
-      var todayX = lab + (inner.clientWidth - lab) * pct(t + 0.5) / 100;
+      var todayX = lab + (inner.clientWidth - lab) * pct(t, 0.5) / 100;
       el.scrollLeft = Math.max(0, todayX - lab - (el.clientWidth - lab) * 0.2);
     }
   };
@@ -396,6 +437,14 @@
     '.tl-lab-item{padding-left:4px;color:var(--ink-2);font-weight:400;font-size:13px}',
     '.tl-track{position:relative;flex:1}',
     '.tl-grid{position:absolute;top:0;bottom:0;width:1px;background:var(--line-soft)}',
+    '.tl-wkend{position:absolute;top:0;bottom:0;background:rgba(255,255,255,.035)}',
+    // 주말 표시 토글(일정 제목 옆). 켜지면 체크 칸이 강조색으로 찬다.
+    '.tl-wk{display:inline-flex;align-items:center;gap:7px;padding:4px 11px 4px 9px;border:1px solid var(--line);border-radius:999px;background:transparent;',
+    'color:var(--ink-3);font:inherit;font-size:12.5px;line-height:1.4;cursor:pointer;transition:color .15s,border-color .15s}',
+    '.tl-wk::before{content:"";width:10px;height:10px;box-sizing:border-box;border:1.5px solid currentColor;border-radius:3px}',
+    '.tl-wk:hover{color:var(--ink);border-color:var(--ink-3)}',
+    '.tl-wk[aria-pressed="true"]{color:var(--ink)}',
+    '.tl-wk[aria-pressed="true"]::before{background:var(--accent);border-color:var(--accent)}',
     '.tl-now{position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;background:var(--accent);box-shadow:0 0 14px 1px rgba(138,162,255,.5);z-index:3}',
     '.tl-bar{position:absolute;top:50%;height:20px;margin-top:-10px;padding:0 8px;border-radius:6px;background:var(--c);color:var(--on-color);',
     'font-size:11.5px;font-weight:600;line-height:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transform-origin:left center}',

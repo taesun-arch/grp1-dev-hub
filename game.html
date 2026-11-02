@@ -44,6 +44,8 @@ body{background:var(--stage,#101119)}
 .summary .prog{width:200px;height:4px;margin-top:8px;border-radius:999px;background:var(--surface-2);overflow:hidden}
 .summary .prog span{display:block;height:100%;background:var(--c)}
 .sub-h{margin:28px 0 10px;font-size:15px;font-weight:600}
+.sec-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
+.pane .sec-head h2{margin:0}
 
 .docs{list-style:none;margin:0;padding:4px 0}
 .docs li+li{border-top:1px solid var(--line-soft)}
@@ -109,7 +111,7 @@ body{background:var(--stage,#101119)}
     <main class="pane" id="pane"></main>
   </div>
 </div>
-<script src="hub.js?v=8d3632d87d"></script>
+<script src="hub.js?v=20c8a76350"></script>
 <script>
 (function () {
   'use strict';
@@ -209,18 +211,10 @@ body{background:var(--stage,#101119)}
   function renderTab(tab) {
     var html = '';
     if (tab.sched) {
-      html += '<h2>일정</h2>';
-      var items = G.schedule ? G.schedule.items : [];
-      if (items.length) {
-        var ms = H.nextMilestone(items, TODAY), ph = H.currentPhase(items, TODAY);
-        if (ms || ph) {
-          html += '<div class="summary">';
-          if (ms) html += '<div><span class="lbl">다음 마일스톤</span><span class="dd">' + H.ddayText(ms.days) + '</span><span class="dd-t">' + esc(ms.title) + ' ' + H.md(ms.date) + '</span></div>';
-          if (ph) html += '<div><span class="lbl">지금</span><span class="ph">' + esc(ph.title) + '<i>' + ph.day + ' / ' + ph.len + '일</i></span><div class="prog"><span style="width:' + (ph.day / ph.len * 100).toFixed(1) + '%"></span></div></div>';
-          html += '</div>';
-        }
-        html += '<div class="panel sched-panel"><div id="gantt"></div></div>';
-      }
+      var hasItems = !!(G.schedule && G.schedule.items.length);
+      html += '<div class="sec-head"><h2>일정</h2>' +
+        (hasItems ? '<button class="tl-wk" type="button" aria-pressed="' + H.weekendsShown() + '">주말 표시</button>' : '') + '</div>';
+      if (hasItems) html += '<div id="sched-box"></div>';
       if (tab.cat) html += '<h3 class="sub-h">일정 문서</h3>' + docList(tab.cat);
     } else if (tab.history) {
       html += '<h2>변경 이력</h2>' + (tab.history.length ? '<div class="panel"><ol class="hist">' + tab.history.map(histRow).join('') + '</ol></div>'
@@ -230,12 +224,33 @@ body{background:var(--stage,#101119)}
     }
     html += '<div id="viewer-slot"></div>';
     $('pane').innerHTML = html;
-    if ($('gantt')) H.timeline($('gantt'), [{ label: '', color: COLOR, items: G.schedule.items }], TODAY, { compact: false, labelWidth: window.innerWidth < 640 ? 110 : 150 });
+    if ($('sched-box')) drawSched(true);
 
     $('pane').onclick = function (ev) {
+      var wk = ev.target.closest('.tl-wk');
+      if (wk) {
+        H.setWeekendsShown(!H.weekendsShown());
+        wk.setAttribute('aria-pressed', String(H.weekendsShown()));
+        return drawSched(false);
+      }
       var b = ev.target.closest('[data-doc]');
       if (b) go({ c: state.c, d: b.dataset.doc, v: b.dataset.v ? +b.dataset.v : null });
     };
+  }
+
+  // 일정 요약(다음 마일스톤 · 지금 기간) + 간트. 주말 표시를 바꾸면 이 부분만 다시 그린다(아래 문서 뷰어는 그대로).
+  function drawSched(animate) {
+    var items = G.schedule.items, wk = H.weekendsShown(), html = '';
+    var ms = H.nextMilestone(items, TODAY), ph = H.currentPhase(items, TODAY, !wk);
+    if (ms || ph) {
+      html += '<div class="summary">';
+      if (ms) html += '<div><span class="lbl">다음 마일스톤</span><span class="dd">' + H.ddayText(ms.days) + '</span><span class="dd-t">' + esc(ms.title) + ' ' + H.md(ms.date) + '</span></div>';
+      if (ph) html += '<div><span class="lbl">지금</span><span class="ph">' + esc(ph.title) + '<i>' + ph.day + ' / ' + ph.len + '일</i></span><div class="prog"><span style="width:' + (ph.day / ph.len * 100).toFixed(1) + '%"></span></div></div>';
+      html += '</div>';
+    }
+    $('sched-box').innerHTML = html + '<div class="panel sched-panel"><div id="gantt"></div></div>';
+    H.timeline($('gantt'), [{ label: '', color: COLOR, items: items }], TODAY,
+      { compact: false, labelWidth: window.innerWidth < 640 ? 110 : 150, weekends: wk, animate: animate });
   }
 
   function docList(cat) {
