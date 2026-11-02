@@ -111,7 +111,7 @@ body{background:var(--stage,#101119)}
     <main class="pane" id="pane"></main>
   </div>
 </div>
-<script src="hub.js?v=20c8a76350"></script>
+<script src="hub.js?v=1fca549b7f"></script>
 <script>
 (function () {
   'use strict';
@@ -127,7 +127,8 @@ body{background:var(--stage,#101119)}
       return;
     }
     M = m; PASS = pass; TODAY = H.todayKST(); NOW = Date.now();
-    H.iconColor(G.icon, G.slug).then(function (c) { COLOR = c; start(q); });
+    // 게임 색은 첫 화면과 같은 계산(모든 게임의 아이콘 색을 서로 겹치지 않게 벌린 값)
+    H.gameColors(m.games).then(function (colors) { COLOR = colors[G.slug]; start(q); });
   } });
 
   function categoryOf(id) {

@@ -253,6 +253,44 @@
     return 'hsl(' + h + ' ' + Math.round(Math.max(45, Math.min(90, s * 100))) + '% ' + Math.round(Math.max(58, Math.min(70, l * 100))) + '%)';
   }
 
+  // 게임 색이 서로 겹치지 않게 색상(hue)을 벌린다. list = [{ slug, color: 'hsl(H S% L%)', icon }] → { slug: 색 }.
+  // 아이콘 있는 게임이 먼저(그다음 슬러그 순) 제 색을 갖고, 앞서 정한 색과 MIN_HUE° 안이면 가장 가까운 빈 색상으로 옮긴다(채도·밝기 유지).
+  // 빈 색상이 없을 만큼 게임이 많으면 이미 쓴 색상에서 가장 먼 곳에 둔다. 입력 순서와 무관하게 결과가 같다.
+  var MIN_HUE = 36, HSL_RE = /^hsl\(([\d.]+) ([\d.]+)% ([\d.]+)%\)$/;
+  HUB.distinctColors = function (list) {
+    var taken = [], out = {};
+    function hueDist(a, b) { var d = Math.abs(a - b) % 360; return Math.min(d, 360 - d); }
+    function gap(h) { return taken.reduce(function (m, t) { return Math.min(m, hueDist(h, t)); }, 360); }
+    list.slice().sort(function (a, b) { return (b.icon ? 1 : 0) - (a.icon ? 1 : 0) || (a.slug < b.slug ? -1 : a.slug > b.slug ? 1 : 0); })
+      .forEach(function (e) {
+        var m = HSL_RE.exec(e.color);
+        if (!m) { out[e.slug] = e.color; return; }
+        var h = Math.round(+m[1]) % 360, best = null, s, c;
+        for (s = 0; s <= 180 && best === null; s++) {
+          if (gap((h + s) % 360) >= MIN_HUE) best = (h + s) % 360;
+          else if (gap((h - s + 360) % 360) >= MIN_HUE) best = (h - s + 360) % 360;
+        }
+        if (best === null) for (c = 0, s = -1; c < 360; c++) if (gap(c) > s) { s = gap(c); best = c; }
+        taken.push(best);
+        out[e.slug] = best === h ? e.color : 'hsl(' + best + ' ' + m[2] + '% ' + m[3] + '%)';
+      });
+    return out;
+  };
+  // 게임별 색 { slug: 색 }. 아이콘 대표색을 뽑은 뒤 첫 화면에 함께 보이는(삭제되지 않은) 게임끼리 겹치지 않게 벌린다.
+  // 첫 화면 · 게임 화면이 같은 매니페스트로 같은 계산을 하므로 두 화면의 색이 같다. 삭제된 게임은 아이콘 색 그대로.
+  HUB.gameColors = function (games) {
+    return Promise.all(games.map(function (g) { return HUB.iconColor(g.icon, g.slug); })).then(function (raw) {
+      var out = {}, live = [];
+      games.forEach(function (g, i) {
+        out[g.slug] = raw[i];
+        if (!g.removed) live.push({ slug: g.slug, color: raw[i], icon: !!g.icon });
+      });
+      var d = HUB.distinctColors(live);
+      Object.keys(d).forEach(function (k) { out[k] = d[k]; });
+      return out;
+    });
+  };
+
   HUB.iconHtml = function (game, size, color) {
     var st = 'width:' + size + 'px;height:' + size + 'px';
     if (game.icon) return '<img class="hub-icon" src="' + game.icon + '" alt="" style="' + st + '">';

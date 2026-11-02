@@ -96,26 +96,26 @@ a.keydates:hover{background:rgba(255,255,255,.02)}
     <div class="cards" id="cards"></div>
   </section>
 </div>
-<script src="hub.js?v=20c8a76350"></script>
+<script src="hub.js?v=1fca549b7f"></script>
 <script>
 (function () {
   'use strict';
   var H = window.HUB, $ = function (id) { return document.getElementById(id); }, esc = H.escape;
 
   H.gate({ title: 'GRP1 개발 허브', onOpen: function (m) {
-    Promise.all(m.games.map(function (g) { return H.iconColor(g.icon, g.slug); })).then(function (colors) {
-      render(m, colors, true);
+    // 게임 색: 아이콘 대표색을 게임끼리 겹치지 않게 벌린 값(게임 화면과 같은 계산)
+    H.gameColors(m.games).then(function (color) {
+      render(m, color, true);
       // 주말 표시를 바꾸면 간트와 카드의 진행도(평일/달력 일수)를 애니메이션 없이 다시 그린다
-      $('wk').addEventListener('click', function () { H.setWeekendsShown(!H.weekendsShown()); render(m, colors, false); });
+      $('wk').addEventListener('click', function () { H.setWeekendsShown(!H.weekendsShown()); render(m, color, false); });
     });
   } });
 
-  function render(m, colors, animate) {
+  function render(m, color, animate) {
     var today = H.todayKST(), now = Date.now(), wk = H.weekendsShown();
     $('wk').setAttribute('aria-pressed', String(wk));
-    var color = {}, docs = {};
-    m.games.forEach(function (g, i) {
-      color[g.slug] = colors[i];
+    var docs = {};
+    m.games.forEach(function (g) {
       g.categories.forEach(function (c) { c.docs.forEach(function (d) { docs[g.slug + '\n' + d.id] = { category: c.name, title: d.title, removed: d.removed }; }); });
     });
     $('today').textContent = H.todayLabel(now);
