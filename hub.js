@@ -340,13 +340,17 @@
     var now = '<i class="tl-now" style="left:' + pct(t, 0.5) + '%"></i>';
 
     function shapes(items, color, mode, delay) {
+      // 같은 줄의 마름모가 막대의 시작·끝 날에 놓이면 막대를 그 마름모 한가운데서 끊는다 —
+      // 막대는 그날 끝까지, 마름모는 그날 한가운데라 하루 폭이 마름모보다 넓으면 막대 끝이 마름모 밖으로 삐져나온다.
+      var msDay = {};
+      items.forEach(function (it) { if (it.kind !== 'phase') msDay[dn(it.date)] = true; });
       return items.map(function (it) {
         var c = '--c:' + color + ';--d:' + delay + 'ms;';
         if (it.kind === 'phase') {
-          var a = dn(it.start), b = dn(it.end);
+          var a = dn(it.start), b = dn(it.end), fa = msDay[a] ? 0.5 : 0, fb = msDay[b] ? 0.5 : 1;
           var cls = 'tl-bar' + (b < t ? ' past' : '') + (it.done ? ' done' : '');
           var text = mode === 'row-label' ? (it.note ? '<span class="tl-note">' + HUB.escape(it.note) + '</span>' : '') : HUB.escape(it.title);
-          return '<span class="' + cls + '" title="' + HUB.escape(it.title + ' ' + md(a) + '–' + md(b)) + '" style="' + c + 'left:' + pct(a, 0) + '%;width:' + (pct(b, 1) - pct(a, 0)) + '%">' + text + '</span>';
+          return '<span class="' + cls + '" title="' + HUB.escape(it.title + ' ' + md(a) + '–' + md(b)) + '" style="' + c + 'left:' + pct(a, fa) + '%;width:' + (pct(b, fb) - pct(a, fa)) + '%">' + text + '</span>';
         }
         var m = dn(it.date), x = pct(m, 0.5);
         var dia = '<span class="tl-dia' + (m < t ? ' past' : '') + '" title="' + HUB.escape(it.title + ' ' + md(m)) + '" style="' + c + 'left:' + x + '%"></span>';
