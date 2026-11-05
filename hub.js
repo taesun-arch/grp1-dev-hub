@@ -159,15 +159,26 @@
       return { title: it.title, date: it.date, days: n - t, weekday: '일월화수목금토'.charAt(new Date(n * DAY).getUTCDay()) };
     }).sort(function (a, b) { return a.days - b.days; });
   };
-  // 첫 화면 게임 순서. 제목에 '런칭'이 든 마일스톤(여럿이면 가장 늦은 것)을 런칭일로 보고
-  // 런칭 전(당일 포함) 가까운 순 → 런칭일 없음 → 런칭 지남(최근 순). 같은 자리는 받은 순서(매니페스트의 order → 최근 갱신).
+  // 게임의 런칭일(일 번호): 제목에 '런칭'이 든 마일스톤, 여럿이면 가장 늦은 것. 없으면 null.
+  function launchDay(g) {
+    var n = null;
+    (g.schedule ? g.schedule.items : []).forEach(function (it) {
+      if (it.kind === 'milestone' && it.title.indexOf('런칭') >= 0 && (n === null || dn(it.date) > n)) n = dn(it.date);
+    });
+    return n;
+  }
+  // 런칭 완료 = 런칭일이 지났거나(당일은 아직 아니다) game.json 의 status 가 launched.
+  HUB.isLaunched = function (g, today) {
+    if (g.status === 'launched') return true;
+    var n = launchDay(g);
+    return n !== null && n < dn(today);
+  };
+  // 첫 화면 게임 순서. 런칭 전(당일 포함) 가까운 순 → 런칭일 없음 → 런칭 지남(최근 순).
+  // 같은 자리는 받은 순서(매니페스트의 order → 최근 갱신).
   HUB.byLaunch = function (games, today) {
     var t = dn(today);
     return games.map(function (g, i) {
-      var n = null;
-      (g.schedule ? g.schedule.items : []).forEach(function (it) {
-        if (it.kind === 'milestone' && it.title.indexOf('런칭') >= 0 && (n === null || dn(it.date) > n)) n = dn(it.date);
-      });
+      var n = launchDay(g);
       return { g: g, i: i, grp: n === null ? 1 : n >= t ? 0 : 2, key: n === null ? 0 : n >= t ? n : -n };
     }).sort(function (a, b) { return a.grp - b.grp || a.key - b.key || a.i - b.i; }).map(function (x) { return x.g; });
   };
@@ -191,7 +202,9 @@
   // ───────── 표시 도우미 ─────────
   var ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
   HUB.escape = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return ESC[c]; }); };
-  HUB.statusLabel = function (s) { return ({ kickoff: '킥오프', dev: '개발 중', launched: '런칭' })[s] || s; };
+  HUB.statusLabel = function (s) { return ({ kickoff: '킥오프', dev: '개발 중', launched: '런칭 완료' })[s] || s; };
+  // 화면에 보일 상태. 런칭일이 지나면 game.json 을 고치지 않아도 런칭 완료로 보인다.
+  HUB.gameStatusLabel = function (g, today) { return HUB.statusLabel(HUB.isLaunched(g, today) ? 'launched' : g.status); };
   // 슬러그 해시(FNV-1a)로 색상환 위치를 정한다. 비슷한 슬러그도 색이 멀리 떨어지게.
   HUB.fallbackColor = function (slug) {
     var h = 2166136261;
@@ -397,11 +410,11 @@
       placeAll();
       if (document.fonts && document.fonts.ready) document.fonts.ready.then(placeAll);
     }
-    // 좁은 화면: 오늘 선이 고정된 이름 열 오른쪽, 보이는 구간의 1/5 지점에 오도록 가로 스크롤한다.
+    // 좁은 화면: 오늘 선이 고정된 이름 열 오른쪽, 보이는 구간의 opts.todayAt(기본 1/5) 지점에 오도록 가로 스크롤한다.
     var inner = el.firstChild;
     if (el.scrollWidth > el.clientWidth) {
       var todayX = lab + (inner.clientWidth - lab) * pct(t, 0.5) / 100;
-      el.scrollLeft = Math.max(0, todayX - lab - (el.clientWidth - lab) * 0.2);
+      el.scrollLeft = Math.max(0, todayX - lab - (el.clientWidth - lab) * (opts.todayAt == null ? 0.2 : opts.todayAt));
     }
   };
 

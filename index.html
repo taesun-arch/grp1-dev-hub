@@ -13,12 +13,18 @@
 /* 첫 화면: 전체 일정(주인공) → 게임 보드. 공용 토큰·타임라인 CSS 는 hub.js 가 넣는다. */
 body{background:var(--stage,#101119)}
 .wrap{max-width:1320px;margin:0 auto;padding:0 var(--gutter) 64px}
-.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:6px 16px;padding:40px 0 30px}
+.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:6px 16px;padding:40px 0 18px}
 .brand{margin:0;font-size:30px;line-height:1.15;font-weight:700;letter-spacing:-.025em}
 .top p{margin:0 0 3px;color:var(--ink-3);font-size:13px;white-space:nowrap}
 .top p b{color:var(--ink);font-weight:600;font-size:15px;margin-right:10px}
+/* 개발중 / 런칭 완료 탭: 아래 전체 일정·게임 보드를 함께 거른다 */
+.view-tabs{display:flex;gap:4px;margin-bottom:30px;border-bottom:1px solid var(--line)}
+.view-tab{margin-bottom:-1px;padding:9px 14px;border:0;border-bottom:2px solid transparent;background:none;color:var(--ink-3);font:inherit;font-size:15px;font-weight:500;cursor:pointer;transition:color .15s}
+.view-tab:hover{color:var(--ink)}
+.view-tab[aria-selected="true"]{color:var(--ink);font-weight:600;border-bottom-color:var(--accent)}
+.view-tab .n{margin-left:6px;color:var(--ink-3);font-weight:500;font-variant-numeric:tabular-nums}
 section{margin-top:44px}
-section:first-of-type{margin-top:0}
+section:first-of-type,section[hidden]+section{margin-top:0}
 h2{margin:0 0 14px;font-size:18px;font-weight:600;letter-spacing:-.01em;color:var(--ink)}
 h2 .n{margin-left:7px;color:var(--ink-3);font-weight:500}
 .sec-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
@@ -70,7 +76,8 @@ a.keydates:hover{background:rgba(255,255,255,.02)}
 .empty{padding:40px 0;color:var(--ink-3);text-align:center}
 
 @media (max-width:640px){
-  .top{padding:24px 0 20px}
+  .top{padding:24px 0 12px}
+  .view-tabs{margin-bottom:22px}
   .brand{font-size:24px}
   .top p b{font-size:14px}
   section{margin-top:36px}
@@ -87,6 +94,10 @@ a.keydates:hover{background:rgba(255,255,255,.02)}
     <h1 class="brand">GRP1 개발 허브</h1>
     <p><b id="today"></b> <span id="built"></span></p>
   </header>
+  <nav class="view-tabs" id="view-tabs" role="tablist" aria-label="게임 구분">
+    <button class="view-tab" role="tab" type="button" data-view="dev" aria-selected="true">개발중<span class="n" id="n-dev"></span></button>
+    <button class="view-tab" role="tab" type="button" data-view="done" aria-selected="false">런칭 완료<span class="n" id="n-done"></span></button>
+  </nav>
   <section class="sched" id="sched" hidden>
     <div class="sec-head"><h2>전체 일정</h2><button class="tl-wk" id="wk" type="button" aria-pressed="false">주말 표시</button></div>
     <div class="panel"><div id="timeline"></div></div>
@@ -96,11 +107,15 @@ a.keydates:hover{background:rgba(255,255,255,.02)}
     <div class="cards" id="cards"></div>
   </section>
 </div>
-<script src="hub.js?v=c402588bec"></script>
+<script src="hub.js?v=97efbc3402"></script>
 <script>
 (function () {
   'use strict';
   var H = window.HUB, $ = function (id) { return document.getElementById(id); }, esc = H.escape;
+
+  // 보고 있던 탭은 같은 창 안에서만 기억한다 — 게임 화면에 갔다 돌아와도 유지되고, 새로 열면 개발중부터.
+  var VIEW_STORE = 'hub-view', view = 'dev';
+  try { if (sessionStorage.getItem(VIEW_STORE) === 'done') view = 'done'; } catch (e) { /* 저장 불가 환경 */ }
 
   H.gate({ title: 'GRP1 개발 허브', onOpen: function (m) {
     // 게임 색: 아이콘 대표색을 게임끼리 겹치지 않게 벌린 값(게임 화면과 같은 계산)
@@ -108,6 +123,13 @@ a.keydates:hover{background:rgba(255,255,255,.02)}
       render(m, color, true);
       // 주말 표시를 바꾸면 간트와 카드의 진행도(평일/달력 일수)를 애니메이션 없이 다시 그린다
       $('wk').addEventListener('click', function () { H.setWeekendsShown(!H.weekendsShown()); render(m, color, false); });
+      $('view-tabs').addEventListener('click', function (ev) {
+        var b = ev.target.closest('.view-tab');
+        if (!b || b.dataset.view === view) return;
+        view = b.dataset.view;
+        try { sessionStorage.setItem(VIEW_STORE, view); } catch (e) { /* 저장 불가 환경 */ }
+        render(m, color, false);
+      });
     });
   } });
 
@@ -125,20 +147,28 @@ a.keydates:hover{background:rgba(255,255,255,.02)}
     // 삭제된 게임(폴더가 사라짐)은 첫 화면에서 뺀다(이전 판 링크는 계속 열린다). 순서는 런칭이 가까운 게임부터.
     var live = H.byLaunch(m.games.filter(function (g) { return !g.removed; }), today);
 
+    // 탭: 런칭 완료 / 개발중으로 나눠 고른 쪽만 아래에 그린다
+    var done = live.filter(function (g) { return H.isLaunched(g, today); });
+    var dev = live.filter(function (g) { return !H.isLaunched(g, today); });
+    var shown = view === 'done' ? done : dev;
+    $('n-dev').textContent = String(dev.length);
+    $('n-done').textContent = String(done.length);
+    [].forEach.call($('view-tabs').querySelectorAll('.view-tab'), function (b) { b.setAttribute('aria-selected', String(b.dataset.view === view)); });
+
     // 전체 일정
-    var rows = live.map(function (g) {
+    var rows = shown.map(function (g) {
       return { label: H.iconHtml(g, 30, color[g.slug]) + '<span>' + esc(g.name) + '</span>', color: color[g.slug],
         items: g.schedule ? g.schedule.items : [], href: H.gameLink(g.slug, '일정') };
     });
-    if (rows.some(function (r) { return r.items.length; })) {
-      $('sched').hidden = false;
-      H.timeline($('timeline'), rows, today, { compact: true, labelWidth: window.innerWidth < 640 ? 140 : 220, weekends: wk, animate: animate });
-    }
+    $('sched').hidden = !rows.some(function (r) { return r.items.length; });
+    // 런칭 완료 탭은 볼 일정이 전부 과거라 폰에서 오늘 선을 오른쪽 가까이 둔다
+    if (!$('sched').hidden) H.timeline($('timeline'), rows, today, { compact: true, labelWidth: window.innerWidth < 640 ? 140 : 220, weekends: wk, animate: animate, todayAt: view === 'done' ? 0.8 : 0.2 });
 
     // 게임 보드
-    $('game-count').textContent = live.length ? String(live.length) : '';
-    $('cards').innerHTML = live.length ? live.map(function (g) { return card(g, m.history, color[g.slug], today, now, docs, wk); }).join('')
-      : '<p class="empty">아직 올라온 게임이 없습니다.</p>';
+    var none = !live.length ? '아직 올라온 게임이 없습니다.' : view === 'done' ? '아직 런칭 완료한 게임이 없습니다.' : '개발 중인 게임이 없습니다.';
+    $('game-count').textContent = shown.length ? String(shown.length) : '';
+    $('cards').innerHTML = shown.length ? shown.map(function (g) { return card(g, m.history, color[g.slug], today, now, docs, wk); }).join('')
+      : '<p class="empty">' + none + '</p>';
   }
 
   function card(g, history, c, today, now, docs, wk) {
@@ -146,7 +176,7 @@ a.keydates:hover{background:rgba(255,255,255,.02)}
     var ms = H.milestones(items, today), ph = H.currentPhase(items, today, !wk);
     var html = '<article class="card" style="--c:' + c + '">' +
       '<a class="card-head" href="' + H.gameLink(g.slug) + '">' + H.iconHtml(g, 48, c) +
-      '<span><span class="nm">' + esc(g.name) + '</span><span class="status">' + esc(H.statusLabel(g.status)) + '</span></span></a>';
+      '<span><span class="nm">' + esc(g.name) + '</span><span class="status">' + esc(H.gameStatusLabel(g, today)) + '</span></span></a>';
 
     // 개발 완료·런칭 같은 마일스톤 날짜를 크게. 가장 가까운 것은 D-day 를 게임 색으로 채우고, 지난 것은 흐리게 D+n.
     if (ms.length) {

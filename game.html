@@ -111,7 +111,7 @@ body{background:var(--stage,#101119)}
     <main class="pane" id="pane"></main>
   </div>
 </div>
-<script src="hub.js?v=c402588bec"></script>
+<script src="hub.js?v=97efbc3402"></script>
 <script>
 (function () {
   'use strict';
@@ -146,7 +146,7 @@ body{background:var(--stage,#101119)}
     document.title = G.name + ' – GRP1 개발 허브';
     $('back').href = 'index.html' + H.hashSuffix();
     $('ident').innerHTML = H.iconHtml(G, 56, COLOR) + '<div><h1>' + esc(G.name) + '</h1><div class="meta"><span class="status">' +
-      esc(G.removed ? '삭제된 게임' : H.statusLabel(G.status)) + '</span>' + (G.updated ? '<span>마지막 갱신 ' + H.ago(G.updated, NOW) + '</span>' : '') + '</div></div>';
+      esc(G.removed ? '삭제된 게임' : H.gameStatusLabel(G, TODAY)) + '</span>' + (G.updated ? '<span>마지막 갱신 ' + H.ago(G.updated, NOW) + '</span>' : '') + '</div></div>';
 
     // 탭: 일정(일정이나 "일정" 카테고리가 있을 때) → 카테고리(가나다) → 변경 이력
     var schedCat = G.categories.filter(function (c) { return c.name === SCHED; })[0];
