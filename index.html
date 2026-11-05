@@ -23,6 +23,28 @@ body{background:var(--stage,#101119)}
 .view-tab:hover{color:var(--ink)}
 .view-tab[aria-selected="true"]{color:var(--ink);font-weight:600;border-bottom-color:var(--accent)}
 .view-tab .n{margin-left:6px;color:var(--ink-3);font-weight:500;font-variant-numeric:tabular-nums}
+/* 런칭 완료 탭 맨 위: 대시보드로 넘어가는 링크(dashboard.json → 암호화된 매니페스트).
+   그림은 간트와 같은 모양으로 "개발 기간 막대 → 런칭 마름모 → 지표 선" — 허브의 일정이 끝나고 대시보드의 숫자로 이어진다. */
+.dash{display:flex;align-items:center;gap:20px;margin-bottom:40px;padding:16px 16px 16px 20px;background:var(--surface);border:1px solid var(--line);border-radius:16px;transition:border-color .2s}
+.dash[hidden]{display:none}
+.dash:hover{border-color:color-mix(in srgb,var(--accent) 50%,var(--line))}
+.dash:focus-visible{border-radius:16px}
+.dash-mark{flex:none;width:96px;height:44px;overflow:visible}
+.dash-dev{fill:none;stroke:var(--accent);stroke-width:7;stroke-linecap:round;opacity:.4}
+.dash-line{fill:none;stroke:var(--accent);stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:1}
+.dash-dot{fill:var(--accent);filter:drop-shadow(0 0 4px rgba(138,162,255,.75));transform-box:fill-box;transform-origin:center}
+.dash-cut{fill:none;stroke:var(--surface);stroke-width:9}
+.dash-dia{fill:var(--ink);stroke:var(--accent);stroke-width:3}
+.dash.draw .dash-line{animation:dash-draw .9s var(--ease) .1s both}
+.dash.draw .dash-dot{animation:dash-pop .35s var(--ease) .85s both}
+@keyframes dash-draw{from{stroke-dashoffset:1}}
+@keyframes dash-pop{from{opacity:0;transform:scale(.3)}}
+.dash-txt{flex:1;min-width:0}
+.dash-title{display:block;font:600 19px/1.2 var(--game);letter-spacing:.005em}
+.dash-desc{display:block;margin-top:3px;color:var(--ink-2);font-size:13px;word-break:keep-all}
+.dash-go{flex:none;display:inline-flex;align-items:center;gap:6px;padding:8px 12px 8px 15px;border-radius:999px;background:var(--surface-2);color:var(--ink);font-size:13px;font-weight:600;white-space:nowrap;transition:background .15s,color .15s}
+.dash:hover .dash-go{background:var(--accent);color:var(--on-color)}
+.dash-go svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 section{margin-top:44px}
 section:first-of-type,section[hidden]+section{margin-top:0}
 h2{margin:0 0 14px;font-size:18px;font-weight:600;letter-spacing:-.01em;color:var(--ink)}
@@ -78,12 +100,21 @@ a.keydates:hover{background:rgba(255,255,255,.02)}
 @media (max-width:640px){
   .top{padding:24px 0 12px}
   .view-tabs{margin-bottom:22px}
+  .dash{gap:14px;margin-bottom:32px;padding:14px 12px 14px 14px}
+  .dash-mark{width:64px;height:30px}
+  .dash-title{font-size:17px}
+  .dash-desc{font-size:12.5px}
   .brand{font-size:24px}
   .top p b{font-size:14px}
   section{margin-top:36px}
   h2{font-size:17px}
   .sched .panel{padding:8px 10px 2px}
   .card-head,.card-part{padding-left:16px;padding-right:16px}
+}
+/* 폰: 버튼은 화살표만 남긴다(글자는 화면 낭독용으로 유지) */
+@media (max-width:480px){
+  .dash-go{padding:9px}
+  .dash-go-t{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 }
 </style>
 </head>
@@ -98,6 +129,17 @@ a.keydates:hover{background:rgba(255,255,255,.02)}
     <button class="view-tab" role="tab" type="button" data-view="dev" aria-selected="true">개발중<span class="n" id="n-dev"></span></button>
     <button class="view-tab" role="tab" type="button" data-view="done" aria-selected="false">런칭 완료<span class="n" id="n-done"></span></button>
   </nav>
+  <a class="dash" id="dash" target="_blank" rel="noopener noreferrer" hidden>
+    <svg class="dash-mark" viewBox="0 0 96 44" aria-hidden="true">
+      <path class="dash-dev" d="M4 30H28"/>
+      <path class="dash-line" pathLength="1" d="M28 30C36 30 38 21 45 22S53 29 59 24S69 11 75 14S86 8 92 6"/>
+      <circle class="dash-dot" cx="92" cy="6" r="3.2"/>
+      <rect class="dash-cut" x="22.5" y="24.5" width="11" height="11" rx="2" transform="rotate(45 28 30)"/>
+      <rect class="dash-dia" x="22.5" y="24.5" width="11" height="11" rx="2" transform="rotate(45 28 30)"/>
+    </svg>
+    <span class="dash-txt"><b class="dash-title" id="dash-title"></b><span class="dash-desc" id="dash-desc"></span></span>
+    <span class="dash-go"><span class="dash-go-t">새 탭에서 열기</span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 11 11 5M6.5 5H11v4.5"/></svg></span>
+  </a>
   <section class="sched" id="sched" hidden>
     <div class="sec-head"><h2>전체 일정</h2><button class="tl-wk" id="wk" type="button" aria-pressed="false">주말 표시</button></div>
     <div class="panel"><div id="timeline"></div></div>
@@ -154,6 +196,16 @@ a.keydates:hover{background:rgba(255,255,255,.02)}
     $('n-dev').textContent = String(dev.length);
     $('n-done').textContent = String(done.length);
     [].forEach.call($('view-tabs').querySelectorAll('.view-tab'), function (b) { b.setAttribute('aria-selected', String(b.dataset.view === view)); });
+
+    // 대시보드 링크(런칭 완료 탭에서만). 빌드가 https 만 통과시키지만 화면에서도 한 번 더 거른다.
+    // 탭을 눌러 카드가 새로 나타날 때마다 지표 선을 한 번 그린다.
+    var dash = $('dash'), d = m.dashboard, showDash = view === 'done' && !!d && /^https:\/\//.test(d.url);
+    if (showDash) {
+      dash.href = d.url;
+      $('dash-title').textContent = d.title;
+      $('dash-desc').textContent = d.desc;
+      if (dash.hidden) { dash.hidden = false; dash.classList.remove('draw'); void dash.offsetWidth; dash.classList.add('draw'); }
+    } else dash.hidden = true;
 
     // 전체 일정
     var rows = shown.map(function (g) {
